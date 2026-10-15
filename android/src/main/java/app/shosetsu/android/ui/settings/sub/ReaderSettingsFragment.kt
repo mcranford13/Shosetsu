@@ -81,6 +81,10 @@ import app.shosetsu.android.viewmodel.impl.settings.paragraphIndentOption
 import app.shosetsu.android.viewmodel.impl.settings.paragraphSpacingOption
 import app.shosetsu.android.viewmodel.impl.settings.readerEngineOption
 import app.shosetsu.android.viewmodel.impl.settings.readerLanguageOption
+import app.shosetsu.android.viewmodel.impl.settings.readerNarratorVoiceOption
+import app.shosetsu.android.viewmodel.impl.settings.readerNeuralPitchNote
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsLinePauseOption
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsParagraphPauseOption
 import app.shosetsu.android.viewmodel.impl.settings.readerPitchOption
 import app.shosetsu.android.viewmodel.impl.settings.readerReadNextChapter
 import app.shosetsu.android.viewmodel.impl.settings.readerReadNextChapterAlert
@@ -88,7 +92,10 @@ import app.shosetsu.android.viewmodel.impl.settings.readerSpeedOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTableHackOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTestOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTextSelectionToggle
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsBackendOption
+import app.shosetsu.android.viewmodel.impl.settings.readerUnknownVoiceOption
 import app.shosetsu.android.viewmodel.impl.settings.readerVoiceOption
+import app.shosetsu.android.viewmodel.impl.settings.readerVoicePackFolder
 import app.shosetsu.android.viewmodel.impl.settings.showReaderDivider
 import app.shosetsu.android.viewmodel.impl.settings.textSizeOption
 import app.shosetsu.android.viewmodel.impl.settings.trackLongReadingOption
@@ -117,6 +124,7 @@ import java.util.Locale
 fun ReaderSettingsView(
 	hostState: SnackbarHostState,
 	onBack: () -> Unit,
+	openVoicePacks: () -> Unit,
 	openCSS: () -> Unit
 ) {
 	val viewModel: AReaderSettingsViewModel = viewModelDi()
@@ -133,7 +141,8 @@ fun ReaderSettingsView(
 			}
 		},
 		hostState = hostState,
-		onBack = onBack
+		onBack = onBack,
+		openVoicePacks = openVoicePacks,
 	)
 }
 
@@ -145,6 +154,7 @@ fun ReaderSettingsContent(
 	showStyleAddSnackBar: () -> Unit,
 	hostState: SnackbarHostState,
 	onBack: () -> Unit,
+	openVoicePacks: () -> Unit,
 ) {
 	Scaffold(
 		topBar = {
@@ -377,6 +387,13 @@ fun ReaderSettingsContent(
 			}
 			item { viewModel.readerPitchOption() }
 			item { viewModel.readerSpeedOption() }
+			item { viewModel.readerTtsBackendOption() }
+			item { viewModel.readerNeuralPitchNote() }
+			item { viewModel.readerTtsLinePauseOption() }
+			item { viewModel.readerTtsParagraphPauseOption() }
+			item { viewModel.readerVoicePackFolder(openVoicePacks) }
+			item { viewModel.readerNarratorVoiceOption() }
+			item { viewModel.readerUnknownVoiceOption() }
 			item { viewModel.readerEngineOption() }
 			item { viewModel.readerLanguageOption() }
 			item { viewModel.readerVoiceOption() }

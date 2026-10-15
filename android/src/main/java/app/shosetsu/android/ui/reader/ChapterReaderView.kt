@@ -56,6 +56,12 @@ import app.shosetsu.android.viewmodel.impl.settings.enableFullscreen
 import app.shosetsu.android.viewmodel.impl.settings.invertChapterSwipeOption
 import app.shosetsu.android.viewmodel.impl.settings.matchFullscreenToFocus
 import app.shosetsu.android.viewmodel.impl.settings.readerEngineOption
+import app.shosetsu.android.viewmodel.impl.settings.readerNarratorVoiceOption
+import app.shosetsu.android.viewmodel.impl.settings.readerNeuralPitchNote
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsLinePauseOption
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsParagraphPauseOption
+import app.shosetsu.android.viewmodel.impl.settings.readerTtsBackendOption
+import app.shosetsu.android.viewmodel.impl.settings.readerUnknownVoiceOption
 import app.shosetsu.android.viewmodel.impl.settings.readerKeepScreenOnOption
 import app.shosetsu.android.viewmodel.impl.settings.readerLanguageOption
 import app.shosetsu.android.viewmodel.impl.settings.readerPitchOption
@@ -95,6 +101,10 @@ fun ChapterReaderView(
 	val matchFullscreenToFocus by viewModel.matchFullscreenToFocus.collectAsState()
 	val currentChapterID by viewModel.currentChapterID.collectAsState()
 	val ttsPlayback by viewModel.ttsPlayback.collectAsState()
+	val currentSpeaker by viewModel.currentSpeaker.collectAsState()
+	val showCast by viewModel.showCast.collectAsState()
+	val castMembers by viewModel.castMembers.collectAsState()
+	val installedVoices by viewModel.installedVoices.collectAsState()
 	val setting by viewModel.getSettings().collectAsState()
 	val currentPage by viewModel.currentPage.collectAsState()
 
@@ -148,6 +158,8 @@ fun ChapterReaderView(
 					},
 					onPauseTTS = viewModel::onPauseTts,
 					onStopTTS = viewModel::onStopTts,
+					currentSpeaker = currentSpeaker,
+					onOpenCast = viewModel::openCast,
 					updateSetting = viewModel::updateSetting,
 					lowerSheet = {
 						item { viewModel.textSizeOption() }
@@ -178,6 +190,12 @@ fun ChapterReaderView(
 						item { viewModel.trackLongReadingOption() }
 						item { viewModel.readerPitchOption() }
 						item { viewModel.readerSpeedOption() }
+						item { viewModel.readerTtsBackendOption() }
+						item { viewModel.readerNeuralPitchNote() }
+						item { viewModel.readerTtsLinePauseOption() }
+						item { viewModel.readerTtsParagraphPauseOption() }
+						item { viewModel.readerNarratorVoiceOption() }
+						item { viewModel.readerUnknownVoiceOption() }
 						item { viewModel.readerEngineOption() }
 						item { viewModel.readerLanguageOption() }
 						item { viewModel.readerVoiceOption() }
@@ -250,6 +268,13 @@ fun ChapterReaderView(
 			//isTapToScroll = isTapToScroll
 			exception = exception,
 			showTTSClickHint = showTTSClickHint
+		)
+		ChapterReaderCastSheet(
+			visible = showCast,
+			members = castMembers,
+			voices = installedVoices,
+			onDismiss = viewModel::dismissCast,
+			onVoiceSelected = viewModel::setCastVoice,
 		)
 		if (isReadingTooLong) {
 			AlertDialog(

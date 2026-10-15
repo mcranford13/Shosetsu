@@ -1,0 +1,169 @@
+{
+  "espeakNgData": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2",
+    "sizeMb": 8
+  },
+  "voices": [
+    {
+      "id": "en_us_lessac",
+      "name": "Lessac",
+      "language": "en-US",
+      "description": "Clear US English voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2",
+      "sizeMb": 63
+    },
+    {
+      "id": "en_us_ryan",
+      "name": "Ryan",
+      "language": "en-US",
+      "description": "US English voice, lower pitch",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ryan-medium.tar.bz2",
+      "sizeMb": 63
+    },
+    {
+      "id": "en_gb_alba",
+      "name": "Alba",
+      "language": "en-GB",
+      "description": "British English voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2",
+      "sizeMb": 63
+    },
+    {
+      "id": "en_gb_alan",
+      "name": "Alan",
+      "language": "en-GB",
+      "description": "British English voice, lower pitch",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alan-medium.tar.bz2",
+      "sizeMb": 63
+    },
+    {
+      "id": "en_gb_cori",
+      "name": "Cori",
+      "language": "en-GB",
+      "description": "British English voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-cori-medium.tar.bz2",
+      "sizeMb": 63
+    },
+    {
+      "id": "kokoro_af",
+      "name": "American Female",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 0,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_bella",
+      "name": "Bella",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 1,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_nicole",
+      "name": "Nicole",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 2,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_sarah",
+      "name": "Sarah",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 3,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_sky",
+      "name": "Sky",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 4,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_adam",
+      "name": "Adam",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 5,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_michael",
+      "name": "Michael",
+      "language": "en-US",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 6,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_emma",
+      "name": "Emma",
+      "language": "en-GB",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 7,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_isabella",
+      "name": "Isabella",
+      "language": "en-GB",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 8,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_george",
+      "name": "George",
+      "language": "en-GB",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 9,
+      "modelId": "kokoro_en"
+    },
+    {
+      "id": "kokoro_lewis",
+      "name": "Lewis",
+      "language": "en-GB",
+      "description": "High-quality Kokoro voice",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
+      "sizeMb": 336,
+      "engine": "kokoro",
+      "speakerId": 10,
+      "modelId": "kokoro_en"
+    }
+  ]
+}

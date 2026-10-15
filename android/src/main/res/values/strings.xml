@@ -62,6 +62,36 @@
 	<string name="reader_test_invalid_voice">Invalid voice selection</string>
 	<string name="reader_read_next_chapter_title">TTS Read Next Chapter</string>
 	<string name="reader_read_next_chapter_desc">Automatically start reading the next chapter when using TTS.</string>
+	<string name="reader_tts_backend">Reading voice</string>
+	<string name="reader_tts_backend_system">System voice</string>
+	<string name="reader_tts_backend_neural">On-device audiobook</string>
+	<string name="reader_tts_neural_pitch">Pitch applies to the system voice only. On-device voices use their own pitch.</string>
+	<string name="reader_tts_line_pause">Within-paragraph pause</string>
+	<string name="reader_tts_line_pause_desc">Silence between dialogue and narration in the same paragraph.</string>
+	<string name="reader_tts_paragraph_pause">Between-paragraph pause</string>
+	<string name="reader_tts_paragraph_pause_desc">Silence before reading the next paragraph.</string>
+	<string name="reader_tts_voice_packs">On-device voice packs</string>
+	<string name="reader_tts_voice_packs_desc">Download or remove voices and shared phoneme data.</string>
+	<string name="reader_tts_espeak">Phoneme data</string>
+	<string name="reader_tts_espeak_desc">Required once for on-device voices. About %1$d MB.</string>
+	<string name="reader_tts_download">Download</string>
+	<string name="reader_tts_delete">Remove</string>
+	<string name="reader_tts_installed">Installed. Tap to remove.</string>
+	<string name="reader_tts_missing">Not downloaded. Tap to download.</string>
+	<string name="reader_tts_downloading">Downloading…</string>
+	<string name="reader_tts_failed">Download failed. Tap to try again.</string>
+	<string name="reader_tts_narrator_voice">Narrator voice</string>
+	<string name="reader_tts_unknown_voice">Unknown speaker voice</string>
+	<string name="reader_tts_need_voice">Download a voice pack first.</string>
+	<string name="reader_tts_fallback">On-device voice is not ready, so the system voice is reading.</string>
+	<string name="reader_tts_cast">Character voices</string>
+	<string name="reader_tts_cast_empty">Download on-device voices in reader settings to assign them.</string>
+	<string name="reader_tts_speaking">Speaking: %1$s</string>
+	<string name="reader_tts_paused">Paused</string>
+	<string name="reader_tts_stop">Stop</string>
+	<string name="reader_tts_test_narration">The afternoon was quiet in the library.</string>
+	<string name="reader_tts_test_dialogue">Hello. This is a different voice.</string>
+	<string name="reader_tts_about_size">About %1$d MB</string>
 
 	<!-- Migration View -->
 
@@ -296,6 +326,7 @@
 	<string name="notification_channel_name_app_update">App Update</string>
 	<string name="notification_channel_name_backup">Backup and Restore</string>
 	<string name="notification_channel_name_repository_update">Repository Update</string>
+	<string name="notification_channel_name_narration">Audiobook</string>
 
 	<!-- Empty View Messages -->
 	<string name="empty_browse_message">There are no extensions, Refresh this page or check your repositories</string>

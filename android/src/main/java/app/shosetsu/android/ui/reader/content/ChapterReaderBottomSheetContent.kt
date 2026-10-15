@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.ScreenLockRotation
 import androidx.compose.material.icons.outlined.ScreenRotation
@@ -28,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.shosetsu.android.R
@@ -55,6 +58,8 @@ fun ChapterReaderBottomSheetContent(
 	onPlayTTS: () -> Unit,
 	onPauseTTS: () -> Unit,
 	onStopTTS: () -> Unit,
+	currentSpeaker: String? = null,
+	onOpenCast: () -> Unit = {},
 	updateSetting: (NovelReaderSettingUI) -> Unit,
 	lowerSheet: LazyListScope.() -> Unit,
 	toggleFocus: () -> Unit,
@@ -111,6 +116,12 @@ fun ChapterReaderBottomSheetContent(
 					onClick = onStopTTS
 				)
 
+			SimpleIconButton(
+				Icons.Outlined.People,
+				stringResource(R.string.reader_tts_cast),
+				onClick = onOpenCast,
+			)
+
 			if (onShowNavigation != null) {
 				SimpleIconButton(
 					Icons.Outlined.UnfoldLess,
@@ -141,6 +152,14 @@ fun ChapterReaderBottomSheetContent(
 	LazyColumn(
 		contentPadding = PaddingValues(vertical = 16.dp)
 	) {
+		if (currentSpeaker != null) {
+			item {
+				Text(
+					text = stringResource(R.string.reader_tts_speaking, currentSpeaker),
+					modifier = Modifier.padding(horizontal = 16.dp),
+				)
+			}
+		}
 		item {
 			GenericBottomSettingLayout(
 				stringResource(R.string.paragraph_spacing),

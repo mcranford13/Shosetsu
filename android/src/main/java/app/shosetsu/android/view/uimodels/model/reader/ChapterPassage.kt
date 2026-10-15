@@ -36,9 +36,11 @@ sealed class ChapterPassage {
 	 *
 	 * @param content content of this chapter
 	 * @param ttsElements text to speech elements of this chapter
+	 * @param segments narration and dialogue, in reading order
 	 */
 	data class Success(
 		val content: String,
-		val ttsElements: RewindableMutableListIterator<TTSText>
+		val ttsElements: RewindableMutableListIterator<TTSText>,
+		val segments: List<SpeechSegment> = emptyList(),
 	) : ChapterPassage()
 }

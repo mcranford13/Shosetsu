@@ -34,6 +34,7 @@
 
 # Keep lib intact
 -keepclasseswithmembers class app.shosetsu.lib.** { *; }
+-keep class com.k2fsa.sherpa.onnx.** { *; }
 -keepclasseswithmembers class org.luaj.** { *; }
 -keepclasseswithmembers class org.jsoup.** { *; }
 -keepclasseswithmembers class okhttp3.** { *; }

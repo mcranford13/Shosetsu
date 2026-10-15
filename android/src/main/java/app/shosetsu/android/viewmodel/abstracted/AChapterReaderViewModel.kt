@@ -8,6 +8,8 @@ import app.shosetsu.android.view.uimodels.model.NovelReaderSettingUI
 import app.shosetsu.android.view.uimodels.model.reader.ChapterPassage
 import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem
 import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem.ReaderChapterUI
+import app.shosetsu.android.view.uimodels.model.reader.ReaderVoiceCast
+import app.shosetsu.android.view.uimodels.model.reader.ReaderVoiceOption
 import app.shosetsu.android.view.uimodels.model.reader.TTSPlayback
 import app.shosetsu.android.viewmodel.base.ExposedSettingsRepoViewModel
 import app.shosetsu.android.viewmodel.base.ShosetsuRootViewModel
@@ -202,6 +204,16 @@ abstract class AChapterReaderViewModel :
 	abstract fun onPlayTts()
 	abstract fun onPauseTts()
 	abstract fun onStopTts()
+
+	/** Name of the character being spoken, if playback is active. */
+	abstract val currentSpeaker: StateFlow<String?>
+
+	abstract val castMembers: StateFlow<List<ReaderVoiceCast>>
+	abstract val showCast: StateFlow<Boolean>
+	abstract val installedVoices: StateFlow<List<ReaderVoiceOption>>
+	abstract fun openCast()
+	abstract fun dismissCast()
+	abstract fun setCastVoice(characterKey: String, voicePackId: String)
 
 	abstract val colorScheme: MutableStateFlow<ColorScheme>
 	abstract val paddingValues: MutableStateFlow<PaddingValues>

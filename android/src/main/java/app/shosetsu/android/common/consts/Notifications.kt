@@ -1,5 +1,6 @@
 package app.shosetsu.android.common.consts
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -55,6 +56,9 @@ object Notifications {
 	const val CHANNEL_REPOSITORY_UPDATE = "shosetsu_repository_update"
 	const val ID_REPOSITORY_UPDATE = 1953
 
+	const val CHANNEL_NARRATION: String = "shosetsu_narration"
+	const val ID_NARRATION: Int = 1962
+
 	const val CHANNEL_APP_UPDATE: String = "shosetsu_app_update"
 	const val ID_APP_UPDATE: Int = 1991
 	const val ID_APP_UPDATE_INSTALL: Int = 1944
@@ -90,7 +94,15 @@ object Notifications {
 					CHANNEL_REPOSITORY_UPDATE,
 					R.string.notification_channel_name_repository_update,
 					NotificationManager.IMPORTANCE_DEFAULT
-				)
+				),
+				notificationChannel(
+					CHANNEL_NARRATION,
+					R.string.notification_channel_name_narration,
+					NotificationManager.IMPORTANCE_LOW
+				).apply {
+					setSound(null, null)
+					lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+				}
 			)
 			notificationManager.createNotificationChannels(channels)
 		}

@@ -45,6 +45,7 @@ import app.shosetsu.android.domain.usecases.get.GetReaderSettingUseCase
 import app.shosetsu.android.domain.usecases.get.GetRemoteNovelUseCase
 import app.shosetsu.android.domain.usecases.get.GetRepositoryUseCase
 import app.shosetsu.android.domain.usecases.get.GetTrueDeleteChapterUseCase
+import app.shosetsu.android.domain.usecases.NovelVoiceCastUseCase
 import app.shosetsu.android.domain.usecases.get.GetURLUseCase
 import app.shosetsu.android.domain.usecases.get.GetUserAgentUseCase
 import app.shosetsu.android.domain.usecases.load.LoadBrowseExtensionsUseCase
@@ -377,5 +378,9 @@ val useCaseModule: DI.Module = DI.Module("useCase") {
 		)
 	}
 	bind<GetTrueDeleteChapterUseCase>() with provider { GetTrueDeleteChapterUseCase(instance()) }
+
+	bind<NovelVoiceCastUseCase>() with provider {
+		NovelVoiceCastUseCase(instance(), instance(), instance())
+	}
 
 }

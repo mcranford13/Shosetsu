@@ -62,5 +62,6 @@ val dbDataSourceModule = DI.Module("database_data_source") {
 			instance()
 		)
 	}
+	bind<IDBNovelVoiceCastDataSource>() with singleton { DBNovelVoiceCastDataSource(instance()) }
 
 }

@@ -37,9 +37,24 @@ fun customSpeak(
 	handleResult: (Int) -> Unit,
 	flush: Boolean = false
 ) {
+	enqueueSpeech(tts, text, utteranceId, handleResult, flush)
+}
+
+/**
+ * Queues [text], splitting it when it is longer than the engine allows.
+ * Returns the utterance id of the last chunk so the caller can wait for it.
+ */
+fun enqueueSpeech(
+	tts: TextToSpeech,
+	text: String,
+	utteranceId: String,
+	handleResult: (Int) -> Unit,
+	flush: Boolean = false
+): String {
 	val trimmed = text.replace("\r\n", "\n")
 		.replace("\t", " ")
 		.trim()
+	if (trimmed.isEmpty()) return utteranceId
 	val max = TextToSpeech.getMaxSpeechInputLength()
 	if (trimmed.length <= max) {
 		val result = tts.speak(
@@ -48,27 +63,26 @@ fun customSpeak(
 			null,
 			utteranceId
 		)
-
 		handleResult(result)
-	} else {
-		var ind = -1
-		for (br in validBreaks) {
-			if (ind == -1) ind = trimmed.substring(0, max + 1).lastIndexOf(br)
-		}
-		if (ind == -1) ind = max
-		customSpeak(
-			tts,
-			trimmed.substring(0, ind + 1),
-			utteranceId,
-			handleResult,
-			flush,
-		)
-		customSpeak(
-			tts,
-			trimmed.substring(ind + 1),
-			utteranceId.substringBefore('|') + UUID.randomUUID(),
-			handleResult,
-			false
-		)
+		return utteranceId
 	}
+	var ind = -1
+	for (br in validBreaks) {
+		if (ind == -1) ind = trimmed.substring(0, max + 1).lastIndexOf(br)
+	}
+	if (ind == -1) ind = max
+	enqueueSpeech(
+		tts,
+		trimmed.substring(0, ind + 1),
+		utteranceId,
+		handleResult,
+		flush,
+	)
+	return enqueueSpeech(
+		tts,
+		trimmed.substring(ind + 1),
+		utteranceId.substringBefore('|') + "|" + UUID.randomUUID().toString(),
+		handleResult,
+		false
+	)
 }

@@ -85,6 +85,9 @@ object Destination {
 			object Reader : ShosetsuDestination.Root
 
 			@Serializable
+			object VoicePacks : ShosetsuDestination.Root
+
+			@Serializable
 			object Downloads : ShosetsuDestination.Root
 
 			@Serializable

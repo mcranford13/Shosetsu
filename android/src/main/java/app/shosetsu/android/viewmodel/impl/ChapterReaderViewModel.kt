@@ -3,13 +3,18 @@ package app.shosetsu.android.viewmodel.impl
 import android.app.Application
 import android.database.sqlite.SQLiteException
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import app.shosetsu.android.R
+import app.shosetsu.android.backend.tts.AudiobookEngine
+import app.shosetsu.android.backend.tts.NarrationService
+import app.shosetsu.android.backend.tts.SpeechRequest
+import app.shosetsu.android.backend.tts.SpeechResult
+import app.shosetsu.android.backend.tts.TtsFailure
+import app.shosetsu.android.backend.tts.VoiceEngine
 import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.SettingKey.ReaderDoubleTapFocus
 import app.shosetsu.android.common.SettingKey.ReaderDoubleTapSystem
@@ -46,6 +51,8 @@ import app.shosetsu.android.common.ext.logV
 import app.shosetsu.android.common.utils.asHtml
 import app.shosetsu.android.common.utils.copy
 import app.shosetsu.android.common.utils.transformCatching
+import app.shosetsu.android.common.utils.tts.DialogueSegmenter
+import app.shosetsu.android.common.utils.tts.SpeechChunker
 import app.shosetsu.android.domain.repository.base.IChaptersRepository
 import app.shosetsu.android.domain.repository.base.INovelReaderSettingsRepository
 import app.shosetsu.android.domain.repository.base.INovelsRepository
@@ -59,7 +66,7 @@ import app.shosetsu.android.domain.usecases.get.GetReaderChaptersUseCase
 import app.shosetsu.android.domain.usecases.get.GetReaderSettingUseCase
 import app.shosetsu.android.domain.usecases.load.LoadDeletePreviousChapterUseCase
 import app.shosetsu.android.domain.usecases.load.LoadLiveAppThemeUseCase
-import app.shosetsu.android.ui.reader.customSpeak
+import app.shosetsu.android.domain.usecases.NovelVoiceCastUseCase
 import app.shosetsu.android.ui.reader.page.ShosetsuStyle
 import app.shosetsu.android.ui.theme.FallbackColorScheme
 import app.shosetsu.android.view.uimodels.model.ExceptionSnackbarModel
@@ -71,6 +78,10 @@ import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem
 import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem.ReaderChapterUI
 import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem.ReaderDividerUI
 import app.shosetsu.android.view.uimodels.model.reader.RewindableMutableListIterator
+import app.shosetsu.android.view.uimodels.model.reader.SegmentSource
+import app.shosetsu.android.view.uimodels.model.reader.SpeechSegment
+import app.shosetsu.android.view.uimodels.model.reader.ReaderVoiceCast
+import app.shosetsu.android.view.uimodels.model.reader.ReaderVoiceOption
 import app.shosetsu.android.view.uimodels.model.reader.TTSPlayback
 import app.shosetsu.android.view.uimodels.model.reader.TTSText
 import app.shosetsu.android.viewmodel.abstracted.AChapterReaderViewModel
@@ -80,7 +91,6 @@ import app.shosetsu.lib.Novel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -97,8 +107,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -114,8 +122,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.acra.ACRA
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import java.util.Locale
-import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
 /*
@@ -157,6 +164,8 @@ class ChapterReaderViewModel(
 	private val getExt: GetExtensionUseCase,
 	private val loadDeletePreviousChapterUseCase: LoadDeletePreviousChapterUseCase,
 	private val deleteChapterPassageUseCase: DeleteChapterPassageUseCase,
+	private val voiceCast: NovelVoiceCastUseCase,
+	private val audiobook: AudiobookEngine,
 ) : AChapterReaderViewModel() {
 
 	private val css = object : ShosetsuCssViewModelComponent() {
@@ -257,6 +266,15 @@ class ChapterReaderViewModel(
 	}
 	override val ttsSpeed by lazy {
 		settingsRepo.getFloatFlow(ReaderSpeed)
+	}
+	private val ttsBackend by lazy {
+		settingsRepo.getStringFlow(SettingKey.ReaderTtsBackend)
+	}
+	private val ttsLinePause by lazy {
+		settingsRepo.getIntFlow(SettingKey.ReaderTtsLinePause)
+	}
+	private val ttsParagraphPause by lazy {
+		settingsRepo.getIntFlow(SettingKey.ReaderTtsParagraphPause)
 	}
 	val ttsNextChapter: StateFlow<Boolean> by lazy {
 		settingsRepo.getBooleanFlow(ReaderNextChapter)
@@ -387,13 +405,13 @@ class ChapterReaderViewModel(
 
 					val ttsElements = document.body().select("*:not(:has(*)):not(br)")
 
-					// we need to generate the ids here
-					// as to ensure they stay here when the html is rendered
-					logV("Generating ids for views")
-					ttsElements.parallelStream().map(::LazyTTSText).forEach {
-						it.id
+					val sources = ArrayList<SegmentSource>(ttsElements.size)
+					ttsElements.forEach { element ->
+						val lazy = LazyTTSText(element)
+						lazy.id
+						sources += SegmentSource(lazy.id, lazy.text)
 					}
-					logV("Finished generating ids for views")
+					val segments = DialogueSegmenter.segment(sources)
 
 					// run GC as we just created a lot of objects
 					// TODO see how to optimize this by not creating so many objects
@@ -411,7 +429,8 @@ class ChapterReaderViewModel(
 						ChapterPassage.Success(
 							document.toString(),
 							// this is fine
-							ttsIterator as RewindableMutableListIterator<TTSText>
+							ttsIterator as RewindableMutableListIterator<TTSText>,
+							segments,
 						)
 					})
 				}
@@ -790,13 +809,8 @@ class ChapterReaderViewModel(
 			if (ttsPlayback.value == TTSPlayback.Paused) {
 				logD("Moving progress")
 
-				// Set the new progress position
-				ttsProgress.value = item.substringAfter("textElement")
-
-				// Start the TTS again
+				ttsSeekElement = item.substringAfter("textElement")
 				ttsPlayback.value = TTSPlayback.Playing
-
-				// Return to prevent further logic
 				return
 			} else if (ttsPlayback.value == TTSPlayback.Playing && !readerTTSClickHintShown.value) {
 				logD("Telling the user a hint")
@@ -976,195 +990,89 @@ class ChapterReaderViewModel(
 	override val ttsProgress = MutableStateFlow<String?>(null)
 	val ttsDone = MutableStateFlow<String?>(null)
 	override val ttsPlayback = MutableStateFlow<TTSPlayback>(TTSPlayback.Stopped)
+	@Volatile
+	private var ttsSeekElement: String? = null
+	private var ttsSegmentCursor = 0
+	private var ttsChunkCursor = 0
 
-	data class TTSBuilder(
-		val engine: String,
-		val language: String,
-		val voice: String,
-	)
-
-	/**
-	 * Provides a TTS to use
-	 */
-	private val tts = ttsEngine.map { engine ->
-		TTSBuilder(engine, "", "")
-	}.filterNotNull().combine(ttsLanguage) { builder, language ->
-		builder.copy(language = language)
-	}.combine(ttsVoice) { builder, voice ->
-		builder.copy(voice = voice)
-	}.map { builder ->
-		val ttsResult = CompletableDeferred<Int>()
-
-		val tts = if (builder.engine.isEmpty()) {
-			TextToSpeech(application, ttsResult::complete)
-		} else {
-			TextToSpeech(application, ttsResult::complete, builder.engine)
-		}
-
-		// Wait for the TTS to initialize
-		when (val result = ttsResult.await()) {
-			TextToSpeech.SUCCESS -> tts to builder
-			else -> {
-				handleTTSError(result, R.string.reader_test_invalid_engine)
-				null
-			}
-		}
-	}.filterNotNull()
-		.filter { (tts, builder) ->
-			/** Has a language been set */
-			val languageSuccess: Boolean
-			val locale: Locale
-
-			if (builder.language.isEmpty()) {
-				// If language not set, assume the default language
-				locale = Locale.getDefault()
-				val result = tts.setLanguage(locale)
-				languageSuccess = when (result) {
-					TextToSpeech.LANG_AVAILABLE -> true
-					TextToSpeech.LANG_COUNTRY_AVAILABLE -> true
-					TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> true
-					else -> false
+	override val currentSpeaker = MutableStateFlow<String?>(null)
+	override val castMembers = MutableStateFlow<List<ReaderVoiceCast>>(emptyList())
+	override val showCast = MutableStateFlow(false)
+	override val installedVoices: StateFlow<List<ReaderVoiceOption>> by lazy {
+		audiobook.packs.library.map { library ->
+			library.voices
+				.filter { it.status == app.shosetsu.android.backend.tts.DownloadStatus.Ready }
+				.map { voice ->
+					val quality = if (voice.engine == VoiceEngine.KOKORO) "Kokoro" else "Piper"
+					ReaderVoiceOption(voice.id, "${voice.name} · $quality (${voice.language})")
 				}
-			} else {
-				// Find the local from languages
-				val ttsLocale =
-					tts.availableLanguages.find { it.toLanguageTag() == builder.language }
-				if (ttsLocale != null) {
-					locale = ttsLocale
-					val result = tts.setLanguage(locale)
-					languageSuccess = when (result) {
-						TextToSpeech.LANG_AVAILABLE -> true
-						TextToSpeech.LANG_COUNTRY_AVAILABLE -> true
-						TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> true
-						else -> false
-					}
-				} else {
-					// Failed to find the locale, strange
-					locale = Locale.getDefault() // need to set this, else warning
-					languageSuccess = false
-				}
-			}
+		}.stateIn(viewModelScopeIO, SharingStarted.WhileSubscribed(5_000), emptyList())
+	}
 
-			// Do not continue if a language has not been set successfully
-			if (!languageSuccess) {
-				exceptions.emit(ExceptionSnackbarModel(application.getString(R.string.reader_test_invalid_language)))
-				return@filter false
-			}
+	private val alertNextChapter = settingsRepo.getBooleanFlow(SettingKey.ReaderNextChapterAlert)
 
-			/** Has the voice been set */
-			val voiceSuccess: Boolean
-			if (builder.voice.isNotEmpty()) {
-				// Find the voice from voices
-				val ttsVoice = tts.voices
-					.filter { it.locale == locale }
-					.find { it.name == builder.voice }
-
-				if (ttsVoice != null) {
-					// Attempt to set the voice if found
-					val result = tts.setVoice(ttsVoice)
-					voiceSuccess = when (result) {
-						TextToSpeech.SUCCESS -> true
-						else -> {
-							handleTTSError(result)
-							false
-						}
-					}
-				} else {
-					voiceSuccess = false
-				}
-			} else {
-				// is fine if there is a default voice
-				voiceSuccess = tts.defaultVoice != null
-			}
-
-			// do not proceed if voice was not successful
-			if (!voiceSuccess) {
-				exceptions.emit(ExceptionSnackbarModel(application.getString(R.string.reader_test_invalid_voice)))
-				return@filter false
-			}
-			true
-		}
-		.combine(
-			ttsPitch
-				.combine(ttsSpeed) { a, b -> a to b }
-				.distinctUntilChanged()
-		) { (tts, _), (pitch, speed) ->
-			tts.apply {
-				setPitch(pitch / 10).let(::launchHandleTTSError)
-				setSpeechRate(speed / 10).let(::launchHandleTTSError)
-			}
-		}
-		.distinctUntilChanged()
-		.onEach {
-			it.setOnUtteranceProgressListener(
-				object : UtteranceProgressListener() {
-					override fun onStart(utteranceId: String?) {
-						logV("Arguments: utteranceId='$utteranceId'")
-						// Only set progress if not stopped
-						if (ttsPlayback.value != TTSPlayback.Stopped) {
-							ttsProgress.value = utteranceId?.substringBefore('|')
-						}
-					}
-
-					override fun onDone(utteranceId: String?) {
-						logV("Arguments: utteranceId='$utteranceId'")
-						ttsDone.value = utteranceId
-					}
-
-					@Deprecated("Deprecated in Java")
-					override fun onError(utteranceId: String?) {
-					}
-
-					override fun onError(utteranceId: String?, errorCode: Int) {
-						logV("Arguments: utteranceId='$utteranceId', errorCode=`$errorCode`")
-						this@ChapterReaderViewModel.logE("TTS Error code: $errorCode")
-						ttsPlayback.value = TTSPlayback.Paused
-					}
-				}
-			).let(::launchHandleTTSError)
-		}
-		.stateIn(viewModelScopeIO, SharingStarted.Eagerly, null)
+	private val narrationListener = object : NarrationService.Listener {
+		override fun pause() = onPauseTts()
+		override fun resume() = onPlayTts()
+		override fun stop() = onStopTts()
+	}
 
 	init {
+		NarrationService.listener = narrationListener
 		viewModelScopeIO.launch {
-			var oldTts: TextToSpeech? = null
+			combine(
+				ttsPlayback,
+				currentSpeaker,
+				currentChapterID,
+				liveData,
+			) { playback, speaker, chapterId, items ->
+				val title = items
+					?.filterIsInstance<ReaderChapterUI>()
+					?.find { it.id == chapterId }
+					?.title
+					?: application.getString(R.string.notification_channel_name_narration)
+				val text = when (playback) {
+					TTSPlayback.Playing -> speaker?.let {
+						application.getString(R.string.reader_tts_speaking, it)
+					} ?: application.getString(R.string.reader_tts_backend)
+					TTSPlayback.Paused -> application.getString(R.string.reader_tts_paused)
+					TTSPlayback.Stopped -> ""
+				}
+				NarrationNotice(playback, title, text, novelIDLive.value, chapterId)
+			}.distinctUntilChanged().collect { notice ->
+				if (notice.playback == TTSPlayback.Stopped) {
+					NarrationService.dismiss(application)
+				} else {
+					NarrationService.show(
+						context = application,
+						playing = notice.playback == TTSPlayback.Playing,
+						title = notice.title,
+						text = notice.text,
+						novelId = notice.novelId,
+						chapterId = notice.chapterId,
+					)
+				}
+			}
+		}
+		viewModelScopeIO.launch {
 			currentChapterID.collectLatest { chapterId ->
 				logV("chapterId='$chapterId'")
-
-				// Child scope is cancelled when the chapter is changed
+				ttsSegmentCursor = 0
+				ttsChunkCursor = 0
+				ttsSeekElement = null
+				audiobook.stop()
 				coroutineScope {
-					// Clear out old TTS
-					logD("Clearing old TTS")
-					oldTts?.stop() // we ignore error codes here, its going away
-					oldTts = null
-
-					// Find the current chapter
-					logD("Finding current chapter")
 					val item = liveData.first { it != null }
-						?.find { (it as? ReaderChapterUI)?.id == chapterId }
-						as? ReaderChapterUI
+						?.find { (it as? ReaderChapterUI)?.id == chapterId } as? ReaderChapterUI
+					if (item == null) return@coroutineScope
 
-					if (item == null) {
-						logD("Failed to find the current chapter, giving up")
-						return@coroutineScope
-					}
-
-					// Clean up memory asap
-					logD("Clearing memory")
 					System.gc()
-
-					// Get the text of the chapter
-					logD("Getting next chapter text")
 					val passage = getChapterPassageHTML(item)
 						.firstOrNull { it is ChapterPassage.Success } as? ChapterPassage.Success
+					if (passage == null) return@coroutineScope
 
-					if (passage == null) {
-						logD("Failed to get chapter passage, giving up")
-						return@coroutineScope
-					}
-
-					logD("Launching next chapter watcher")
-					launch nextChapterTts@{
+					val warnedMissingVoice = AtomicBoolean(false)
+					launch {
 						var count = 0
 						while (count < 10) {
 							count++
@@ -1172,250 +1080,251 @@ class ChapterReaderViewModel(
 							logD("nextChapterTSSProcess returned early, retrying in a second, $count")
 							delay(1000)
 						}
-
-						// We must never reach here
 						exceptions.emit(
 							ExceptionSnackbarModel("Failed to setup next chapter TTS process after 10 tries.")
 						)
 					}
 
-					logD("Starting TTS collector")
-					tts.collectLatest { tts ->
-						onLatestTTS(tts, oldTts, setOldTts = { oldTts = it }, passage)
+					ttsPlayback.collectLatest { playback ->
+						playSegments(playback, passage, warnedMissingVoice)
 					}
 				}
 			}
 		}
 	}
 
-	/**
-	 * The process that handles the TTS next chapter process
-	 */
 	private suspend fun nextChapterTSSProcess(passage: ChapterPassage.Success, chapterId: Int) {
-		logD("Next Chapter TTS job has started, waiting for lastTTS")
-		val lastTts = run {
-			// clone so we do not interrupt parent
-			val elements = passage.ttsElements.clone()
-			// Recreate the model of our clone
-			elements.recreate()
-
-			// Return a temporary reference to this clone
-			elements
-		}.lastOrNull()
-
-		if (lastTts == null) {
-			logD("Last TTS is null, giving up")
-			return
-		}
-
-		logV("Last TTS element='$lastTts'")
-
-		// If the user enables the setting while in the reader, we can listen in
-		ttsNextChapter.collectLatest { ttsNextChapter ->
-			onLatestTTSNextChapterSetting(ttsNextChapter, lastTts, chapterId)
+		val lastSegment = passage.segments.lastOrNull() ?: return
+		ttsNextChapter.collectLatest { enabled ->
+			onLatestTTSNextChapterSetting(enabled, lastSegment, chapterId)
 		}
 	}
 
-	private val alertNextChapter = settingsRepo.getBooleanFlow(SettingKey.ReaderNextChapterAlert)
+	private suspend fun onLatestTTSNextChapterSetting(
+		enabled: Boolean,
+		lastSegment: SpeechSegment,
+		chapterId: Int,
+	) {
+		if (!enabled) return
+		ttsDone.firstOrNull { it != null && it == lastSegment.id } ?: return
+		if (ttsPlayback.value != TTSPlayback.Playing) return
 
-	private suspend fun onLatestTTSNextChapterSetting(ttsNextChapter: Boolean, lastTts: TTSText, chapterId: Int) {
-		logV("Arguments: ttsNextChapter='$ttsNextChapter'")
-		// skip if disabled
-		if (!ttsNextChapter) {
-			logD("ttsNextChapter disabled")
-			return
-		}
-
-		// Wait for the last TTS line to be spoken to move to the next chapter
-		val result = ttsDone.firstOrNull { it != null && it == lastTts.id }
-
-		if (result == null) {
-			logD("Failed to get to last TTS element, giving up")
-			return
-		}
-
-		logD("Last TTS element reached")
-
-		// Get current readerUIItems
-		val readerUIItems =
-			liveData.first { it != null }
-
-		if (readerUIItems == null) {
-			logD("ReaderUIItems is null")
-			return
-		}
-
-		logV("readerUIItems='$readerUIItems'")
-
+		val readerUIItems = liveData.first { it != null } ?: return
 		val chapterItems = readerUIItems.filterIsInstance<ReaderChapterUI>()
-
-		logV("chapterItems='$chapterItems'")
-
-		// Find index of the current chapter
 		val index = chapterItems.indexOfFirst { it.id == chapterId }
+		if (index < 0) return
+		val nextChapter = chapterItems.getOrNull(index + 1) ?: return
 
-		logV("index='$index'")
+		if (alertNextChapter.value) {
+			val narrator = voiceCast.resolve(
+				novelIDLive.value,
+				DialogueSegmenter.NARRATOR,
+				DialogueSegmenter.NARRATOR_NAME,
+			)
+			audiobook.systemEngine = ttsEngine.value
+			audiobook.systemLanguage = ttsLanguage.value
+			audiobook.systemVoice = ttsVoice.value
+			audiobook.play(
+				SpeechRequest(
+					text = application.getString(R.string.reader_tts_next_chapter),
+					speed = ttsSpeed.value / 10f,
+					pitch = ttsPitch.value / 10f,
+					packId = narrator.voicePackId,
+				),
+				backend = ttsBackend.value,
+			)
+			delay(2000)
+		}
+		if (ttsPlayback.value != TTSPlayback.Playing) return
 
-		// ensure we got a valid index
-		if (index >= 0) {
-			logD("We got a valid index!")
-			// Find next chapter
-			val nextChapter = chapterItems
-				.getOrNull(index + 1) // Attempt to get next chapter
-
-			if (nextChapter == null) {
-				logD("next chapter is null, not going over")
-				return
-			}
-
-			logV("nextChapter='$nextChapter'")
-
-			// Check if we have to alert the user before moving on
-			if (alertNextChapter.value) {
-				// Inform the reader we are moving forward
-
-				// generate an ID
-				val id = UUID.randomUUID()
-
-				// Send the information out
-				tts.value?.speak(
-					application.getString(R.string.reader_tts_next_chapter),
-					TextToSpeech.QUEUE_FLUSH,
-					null,
-					id.toString()
-				)
-
-				// await our voice to finish
-				ttsDone.firstOrNull { it != null && id.toString() == it }
-
-				// give the user a bit to process that
-				delay(2000)
-			}
-
-			// Jump to the next chapter
-			logD("Moving to next chapter")
-			pageJumper.emit(readerUIItems.indexOf(nextChapter))
-			viewModelScopeIO.launch {
-				logD("Cleaning up memory")
-				System.gc() // Clear out heavy operation (above)
-				logD("Set the nextChapter as read")
-				onViewed(nextChapter)
-				logD("Set the nextChapter as the current")
-				setCurrentChapterID(nextChapter.id)
-
-				// Start the TTS again
-				logD("Starting up TTS again with a delay")
-				withTimeoutOrNull(5.seconds) {
-					logD("Waiting for TTS to be stopped")
-					if (
-						ttsPlayback.firstOrNull { it == TTSPlayback.Stopped } != null
-					) {
-						logD("TTS has been stopped, starting it for nextChapter")
-						onPlayTts()
-					}
+		pageJumper.emit(readerUIItems.indexOf(nextChapter))
+		viewModelScopeIO.launch {
+			System.gc()
+			onViewed(nextChapter)
+			setCurrentChapterID(nextChapter.id)
+			withTimeoutOrNull(5.seconds) {
+				if (ttsPlayback.firstOrNull { it == TTSPlayback.Stopped } != null) {
+					onPlayTts()
 				}
 			}
 		}
 	}
 
-	/**
-	 * Called whenever a new TTS engine is loaded
-	 */
-	private suspend fun onLatestTTS(
-		tts: TextToSpeech?,
-		oldTts: TextToSpeech?,
-		setOldTts: (TextToSpeech?) -> Unit,
-		passage: ChapterPassage.Success
-	) {
-		logV("Arguments: tts='$tts'")
-		if (tts == null) {
-			logD("TTS is null, clearing old TTS and returning.")
-			oldTts?.stop() // ignore result
-			setOldTts(null)
-			@Suppress("LABEL_NAME_CLASH")
-			return
-		}
-		logD("Clearing out old TTS and setting new as old")
-		oldTts?.stop() // ignore result
-		setOldTts(tts)
-
-		// Are we playing TTS?
-		ttsPlayback.collectLatest { playback ->
-			onLatestTTSPlayback(playback, tts, passage)
-		}
-	}
-
-	/**
-	 * Called whenever a new TTS playback state is received
-	 */
-	private suspend fun onLatestTTSPlayback(
+	private suspend fun playSegments(
 		playback: TTSPlayback,
-		tts: TextToSpeech,
-		passage: ChapterPassage.Success
+		passage: ChapterPassage.Success,
+		warnedMissingVoice: AtomicBoolean,
 	) {
-		logV("Arguments: playback='$playback'")
-
-		// if we are not playing, make sure the TTS is stopped
 		if (playback != TTSPlayback.Playing) {
-			logD("Ensuring TTS is stopped in sync with UI state")
-			tts.stop().let(::launchHandleTTSError)
-			@Suppress("LABEL_NAME_CLASH")
+			audiobook.stop()
+			if (playback == TTSPlayback.Stopped) currentSpeaker.value = null
+			return
+		}
+		val segments = passage.segments
+		if (segments.isEmpty()) {
+			onStopTts()
 			return
 		}
 
-		// child scope is killed off if the parent dies
-		coroutineScope {
-			logD("Syncing TTS iterator")
-			syncTTSIterator(passage.ttsElements)
-
-			// For each element, lets speak it out
-			passage.ttsElements.forEachRemaining {
-				logV("Processing element: it='$it'")
-				if (!it.ignore)
-					customSpeak(
-						tts,
-						it.text,
-						it.id,
-						::launchHandleTTSError
-					)
+		audiobook.systemEngine = ttsEngine.value
+		audiobook.systemLanguage = ttsLanguage.value
+		audiobook.systemVoice = ttsVoice.value
+		val seek = ttsSeekElement
+		ttsSeekElement = null
+		val startIndex = if (seek != null) {
+			ttsChunkCursor = 0
+			val found = segments.indexOfFirst { it.elementId == seek }
+			if (found < 0) 0 else found
+		} else {
+			ttsSegmentCursor.coerceIn(0, segments.lastIndex)
+		}
+		var index = startIndex
+		val voices = HashMap<String, String>()
+		while (index < segments.size && ttsPlayback.value == TTSPlayback.Playing) {
+			val segment = segments[index]
+			val next = segments.getOrNull(index + 1)
+			ttsProgress.value = segment.elementId
+			currentSpeaker.value = segment.displayName
+			val speed = ttsSpeed.value / 10f
+			val pitch = ttsPitch.value / 10f
+			val backend = ttsBackend.value
+			val packId = packFor(voices, segment)
+			val chunks = SpeechChunker.chunks(segment.text)
+			if (chunks.isEmpty()) {
+				ttsDone.value = segment.id
+				index++
+				ttsSegmentCursor = index
+				ttsChunkCursor = 0
+				continue
 			}
+			var chunkIndex = if (index == startIndex) {
+				ttsChunkCursor.coerceIn(0, chunks.lastIndex)
+			} else {
+				0
+			}
+			while (chunkIndex < chunks.size && ttsPlayback.value == TTSPlayback.Playing) {
+				prefetchAhead(segments, voices, index, chunkIndex, speed, pitch, backend)
+				ttsChunkCursor = chunkIndex
+				val result = try {
+					audiobook.play(SpeechRequest(chunks[chunkIndex], speed, pitch, packId), backend)
+				} catch (e: TtsFailure) {
+					launchHandleTTSError(e.code)
+					ttsPlayback.value = TTSPlayback.Paused
+					return
+				}
+				if (result == SpeechResult.FellBackToSystem && warnedMissingVoice.compareAndSet(false, true)) {
+					exceptions.emit(
+						ExceptionSnackbarModel(application.getString(R.string.reader_tts_fallback))
+					)
+				}
+				if (result == SpeechResult.Interrupted || ttsPlayback.value != TTSPlayback.Playing) return
+				chunkIndex++
+				ttsChunkCursor = chunkIndex
+				if (chunkIndex < chunks.size) delay(ttsLinePause.value.coerceAtLeast(0).toLong())
+			}
+			if (ttsPlayback.value != TTSPlayback.Playing) return
+			ttsDone.value = segment.id
+			index++
+			ttsSegmentCursor = index
+			ttsChunkCursor = 0
+			if (next != null) {
+				val pause = if (next.elementId != segment.elementId) {
+					ttsParagraphPause.value
+				} else {
+					ttsLinePause.value
+				}
+				delay(pause.coerceAtLeast(0).toLong())
+			}
+		}
+		if (index >= segments.size && ttsPlayback.value == TTSPlayback.Playing) {
+			currentSpeaker.value = null
+			ttsSegmentCursor = 0
+			ttsChunkCursor = 0
 		}
 	}
 
-	@Throws(NoSuchElementException::class)
-	private fun syncTTSIterator(ttsElements: RewindableMutableListIterator<TTSText>) {
-		val ttsState = ttsProgress.value
+	private suspend fun packFor(voices: MutableMap<String, String>, segment: SpeechSegment): String =
+		voices.getOrPut(segment.characterKey) {
+			voiceCast.resolve(
+				novelIDLive.value,
+				segment.characterKey,
+				segment.displayName,
+			).voicePackId
+		}
 
-		// Recreate!
-		ttsElements.recreate()
+	private suspend fun prefetchAhead(
+		segments: List<SpeechSegment>,
+		voices: MutableMap<String, String>,
+		segmentIndex: Int,
+		chunkIndex: Int,
+		speed: Float,
+		pitch: Float,
+		backend: String,
+	) {
+		val upcoming = ArrayList<SpeechRequest>()
+		var index = segmentIndex
+		var chunk = chunkIndex + 1
+		while (upcoming.size < 3 && index < segments.size) {
+			val segment = segments[index]
+			val chunks = SpeechChunker.chunks(segment.text)
+			if (chunk >= chunks.size) {
+				index++
+				chunk = 0
+				continue
+			}
+			upcoming += SpeechRequest(chunks[chunk], speed, pitch, packFor(voices, segment))
+			chunk++
+		}
+		upcoming.forEach { audiobook.prefetch(it, backend) }
+	}
 
-		// check if the tts was playing something
-		if (ttsState != null) {
-			logV("Attempting to sync TTS to $ttsState")
-			// we were in fact playing something
-			// we need to ensure we are at the right position
-			var found = false
-
-			while (ttsElements.hasNext()) {
-				if (ttsElements.next().id == ttsState) {
-					val currentIndex = ttsElements.nextIndex()
-					try {
-						ttsElements.previous() // make current next
-					} catch (_: NoSuchElementException) {
-						if (currentIndex == 0) {
-							logD("We are at the first element, Recreating the iterator-")
-						}
-						ttsElements.recreate()
+	override fun openCast() {
+		viewModelScopeIO.launch {
+			val novelId = novelIDLive.value
+			if (novelId < 0) return@launch
+			val chapter = liveData.value
+				?.filterIsInstance<ReaderChapterUI>()
+				?.find { it.id == currentChapterID.value }
+				?: return@launch
+			val passage = getChapterPassageHTML(chapter)
+				.firstOrNull { it is ChapterPassage.Success } as? ChapterPassage.Success
+				?: return@launch
+			val rows = passage.segments.distinctBy { it.characterKey }.map { segment ->
+				val saved = voiceCast.resolve(novelId, segment.characterKey, segment.displayName)
+				ReaderVoiceCast(saved.characterKey, saved.displayName, saved.voicePackId)
+			}
+			castMembers.value = rows.sortedWith(
+				compareBy<ReaderVoiceCast> {
+					when (it.characterKey) {
+						DialogueSegmenter.NARRATOR -> 0
+						DialogueSegmenter.UNKNOWN -> 1
+						else -> 2
 					}
-					found = true
-					break
-				}
-			}
+				}.thenBy { it.displayName }
+			)
+			showCast.value = true
+		}
+	}
 
-			if (!found) {
-				logE("Failed to syncc TTS to $ttsState")
-				onStopTts()
-			}
+	override fun dismissCast() {
+		showCast.value = false
+	}
+
+	override fun setCastVoice(characterKey: String, voicePackId: String) {
+		val novelId = novelIDLive.value
+		val current = castMembers.value.find { it.characterKey == characterKey } ?: return
+		castMembers.value = castMembers.value.map { member ->
+			if (member.characterKey == characterKey) member.copy(voicePackId = voicePackId) else member
+		}
+		viewModelScopeIO.launch {
+			voiceCast.save(
+				app.shosetsu.android.domain.model.local.NovelVoiceCastEntity(
+					novelId = novelId,
+					characterKey = characterKey,
+					displayName = current.displayName,
+					voicePackId = voicePackId,
+				)
+			)
 		}
 	}
 
@@ -1430,14 +1339,29 @@ class ChapterReaderViewModel(
 	override fun onStopTts() {
 		ttsPlayback.value = TTSPlayback.Stopped
 		ttsProgress.value = null
+		ttsSegmentCursor = 0
+		ttsChunkCursor = 0
+		ttsSeekElement = null
+		currentSpeaker.value = null
+		audiobook.stop()
 	}
 
 	override val colorScheme: MutableStateFlow<ColorScheme> = MutableStateFlow(FallbackColorScheme)
 	override val paddingValues: MutableStateFlow<PaddingValues> = MutableStateFlow(PaddingValues(0.dp))
 
 	override fun onCleared() {
-		tts.value?.stop()?.let(::launchHandleTTSError)
+		if (NarrationService.listener === narrationListener) NarrationService.listener = null
+		NarrationService.dismiss(application)
+		audiobook.stop()
 	}
+
+	private data class NarrationNotice(
+		val playback: TTSPlayback,
+		val title: String,
+		val text: String,
+		val novelId: Int,
+		val chapterId: Int,
+	)
 
 	/**
 	 * Performs [handleTTSError] on a new UI coroutine

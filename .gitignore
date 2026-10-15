@@ -30,3 +30,6 @@ acra-uptodown.properties
 
 # Kotlin thingy
 *.salive
+
+# Downloaded by the Android build. Not on Maven Central.
+android/libs/*.aar

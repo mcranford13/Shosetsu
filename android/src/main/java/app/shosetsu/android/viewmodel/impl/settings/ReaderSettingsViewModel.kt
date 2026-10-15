@@ -42,6 +42,7 @@ import app.shosetsu.android.common.SettingKey.ReaderTrackLongReading
 import app.shosetsu.android.common.SettingKey.ReaderVoice
 import app.shosetsu.android.common.SettingKey.ReaderVolumeScroll
 import app.shosetsu.android.common.ext.toast
+import org.kodein.di.instance
 import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import app.shosetsu.android.domain.usecases.load.LoadReaderThemes
 import app.shosetsu.android.view.compose.setting.FloatSliderSettingContent
@@ -553,11 +554,49 @@ fun ExposedSettingsRepoViewModel.readerTestOption() {
 		settingsRepo.getFloatFlow(ReaderSpeed)
 	}
 	val scope = rememberCoroutineScope()
+	val di by org.kodein.di.android.closestDI(context)
+	val audiobook: app.shosetsu.android.backend.tts.AudiobookEngine by di.instance()
+	val packs: app.shosetsu.android.backend.tts.VoicePackManager by di.instance()
+	val backend by settingsRepo.getStringFlow(SettingKey.ReaderTtsBackend).collectAsState()
 	TextPreferenceWidget(
 		title = stringResource(R.string.reader_test),
 		widget = { Icon(Icons.AutoMirrored.Outlined.VolumeUp, stringResource(R.string.start)) },
 		onPreferenceClick = {
-			scope.launch {
+			if (backend == SettingKey.TTS_NEURAL) {
+				scope.launch {
+					val installed = packs.installedVoiceIds()
+					if (!packs.espeakReady() || installed.isEmpty()) {
+						context.toast(R.string.reader_tts_need_voice)
+						return@launch
+					}
+					val narrator = settingsRepo.getString(SettingKey.ReaderNarratorVoice)
+						.ifBlank { installed.first() }
+					val other = installed.firstOrNull { it != narrator } ?: narrator
+					val rate = speed.value / 10f
+					val tone = pitch.value / 10f
+					audiobook.systemEngine = engine.value
+					audiobook.systemLanguage = language.value
+					audiobook.systemVoice = voice.value
+					audiobook.play(
+						app.shosetsu.android.backend.tts.SpeechRequest(
+							context.getString(R.string.reader_tts_test_narration),
+							rate,
+							tone,
+							narrator,
+						),
+						SettingKey.TTS_NEURAL,
+					)
+					audiobook.play(
+						app.shosetsu.android.backend.tts.SpeechRequest(
+							context.getString(R.string.reader_tts_test_dialogue),
+							rate,
+							tone,
+							other,
+						),
+						SettingKey.TTS_NEURAL,
+					)
+				}
+			} else scope.launch {
 				val ttsResult = CompletableDeferred<Int>()
 				val tts = if (engine.value.isEmpty()) {
 					TextToSpeech(context) { ttsResult.complete(it) }

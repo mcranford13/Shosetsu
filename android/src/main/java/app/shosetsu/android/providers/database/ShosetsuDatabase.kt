@@ -18,6 +18,7 @@ import app.shosetsu.android.domain.model.database.DBNovelEntity
 import app.shosetsu.android.domain.model.database.DBNovelPinEntity
 import app.shosetsu.android.domain.model.database.DBNovelReaderSettingEntity
 import app.shosetsu.android.domain.model.database.DBNovelSettingsEntity
+import app.shosetsu.android.domain.model.database.DBNovelVoiceCastEntity
 import app.shosetsu.android.domain.model.database.DBRepositoryEntity
 import app.shosetsu.android.domain.model.database.DBRepositoryExtensionEntity
 import app.shosetsu.android.domain.model.database.DBUpdate
@@ -44,7 +45,9 @@ import app.shosetsu.android.providers.database.dao.NovelsDao
 import app.shosetsu.android.providers.database.dao.RepositoryDao
 import app.shosetsu.android.providers.database.dao.RepositoryExtensionsDao
 import app.shosetsu.android.providers.database.dao.UpdatesDao
+import app.shosetsu.android.providers.database.dao.NovelVoiceCastDao
 import app.shosetsu.android.providers.database.migrations.Migration10to11
+import app.shosetsu.android.providers.database.migrations.Migration11to12
 import app.shosetsu.android.providers.database.migrations.Migration1To2
 import app.shosetsu.android.providers.database.migrations.Migration2To3
 import app.shosetsu.android.providers.database.migrations.Migration3To4
@@ -99,8 +102,9 @@ import kotlinx.coroutines.launch
 		DBNovelSettingsEntity::class,
 		DBRepositoryEntity::class,
 		DBUpdate::class,
+		DBNovelVoiceCastEntity::class,
 	],
-	version = 11
+	version = 12
 )
 @TypeConverters(
 	ChapterSortTypeConverter::class,
@@ -129,6 +133,7 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 	abstract val novelSettingsDao: NovelSettingsDao
 	abstract val repositoryDao: RepositoryDao
 	abstract val updatesDao: UpdatesDao
+	abstract val novelVoiceCastDao: NovelVoiceCastDao
 
 	companion object {
 		@Volatile
@@ -153,6 +158,7 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 					Migration8to9,
 					Migration9to10,
 					Migration10to11,
+					Migration11to12,
 				).build()
 
 			GlobalScope.launch {

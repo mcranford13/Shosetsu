@@ -20,6 +20,7 @@ import app.shosetsu.android.domain.repository.base.INovelSettingsRepository
 import app.shosetsu.android.domain.repository.base.INovelsRepository
 import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import app.shosetsu.android.domain.repository.base.IUpdatesRepository
+import app.shosetsu.android.domain.repository.base.INovelVoiceCastRepository
 import app.shosetsu.android.domain.repository.impl.AppUpdatesRepository
 import app.shosetsu.android.domain.repository.impl.BackupRepository
 import app.shosetsu.android.domain.repository.impl.CategoryRepository
@@ -40,6 +41,7 @@ import app.shosetsu.android.domain.repository.impl.NovelSettingsRepository
 import app.shosetsu.android.domain.repository.impl.NovelsRepository
 import app.shosetsu.android.domain.repository.impl.SettingsRepository
 import app.shosetsu.android.domain.repository.impl.UpdatesRepository
+import app.shosetsu.android.domain.repository.impl.NovelVoiceCastRepository
 import org.kodein.di.DI
 import org.kodein.di.bind
 import org.kodein.di.instance
@@ -137,4 +139,6 @@ val repositoryModule: DI.Module = DI.Module("repository_module") {
 	bind<ContributorsRepository>() with singleton {
 		ContributorsRepositoryImpl()
 	}
+
+	bind<INovelVoiceCastRepository>() with singleton { NovelVoiceCastRepository(instance()) }
 }

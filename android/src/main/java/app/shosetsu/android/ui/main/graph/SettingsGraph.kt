@@ -19,6 +19,7 @@ import app.shosetsu.android.ui.settings.sub.BrowseSettingsView
 import app.shosetsu.android.ui.settings.sub.DownloadsSettingsView
 import app.shosetsu.android.ui.settings.sub.LibrarySettingsView
 import app.shosetsu.android.ui.settings.sub.ReaderSettingsView
+import app.shosetsu.android.ui.settings.sub.VoicePackSettingsView
 
 /*
  * This file is part of shosetsu.
@@ -89,6 +90,9 @@ fun NavGraphBuilder.settingsGraph(navController: ShosetsuNavController) {
 			ReaderSettingsView(
 				hostState = hostState,
 				onBack = navController::popBackStack,
+				openVoicePacks = {
+					navController.navigate(Settings.VoicePacks)
+				},
 				openCSS = {
 					context.startActivity(
 						Intent(context, CSSEditorActivity::class.java).apply {
@@ -98,6 +102,9 @@ fun NavGraphBuilder.settingsGraph(navController: ShosetsuNavController) {
 					)
 				}
 			)
+		}
+		composableSub<Settings.VoicePacks> {
+			VoicePackSettingsView(onBack = navController::popBackStack)
 		}
 		composableSub<Settings.Downloads> {
 			DownloadsSettingsView(

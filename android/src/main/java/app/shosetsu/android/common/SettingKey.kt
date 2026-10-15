@@ -287,6 +287,21 @@ sealed class SettingKey<T : Any>(val name: String, val default: T) {
 
 	object ReaderNextChapter : BooleanKey("reader_next_chapter", false)
 
+	/** "system" uses Android TTS. "neural" uses downloaded on-device voices. */
+	object ReaderTtsBackend : StringKey("reader_tts_backend", TTS_SYSTEM)
+
+	/** Default Piper voice for the narrator when a novel has no cast row yet. */
+	object ReaderNarratorVoice : StringKey("reader_narrator_voice", "")
+
+	/** Default Piper voice for dialogue whose speaker could not be named. */
+	object ReaderUnknownVoice : StringKey("reader_unknown_voice", "")
+
+	/** Pause between speech segments that belong to the same paragraph. */
+	object ReaderTtsLinePause : IntKey("reader_tts_line_pause", 200)
+
+	/** Pause after a paragraph before speech moves to the next paragraph. */
+	object ReaderTtsParagraphPause : IntKey("reader_tts_paragraph_pause", 550)
+
 	/**
 	 * If the TTS will alert the reader it is moving to the next chapter
 	 */
@@ -363,6 +378,9 @@ sealed class SettingKey<T : Any>(val name: String, val default: T) {
 	) : StringSetKey("stringSet_$name", default)
 
 	companion object {
+		const val TTS_SYSTEM = "system"
+		const val TTS_NEURAL = "neural"
+
 		private val map: Map<String, SettingKey<*>> by lazy {
 			SettingKey::class.sealedSubclasses
 				.map { it.objectInstance }

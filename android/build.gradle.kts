@@ -11,6 +11,27 @@ plugins {
 val generateContributors by tasks.registering(GenerateContributorsTask::class)
 tasks.preBuild { dependsOn(generateContributors) }
 
+// sherpa-onnx publishes the Android AAR on GitHub releases, not Maven Central.
+// 1.13.8 is built with 16 KB page alignment for targetSdk 36.
+val sherpaOnnxVersion = libs.versions.sherpaOnnx.get()
+val sherpaAar = layout.projectDirectory.file("libs/sherpa-onnx-$sherpaOnnxVersion.aar")
+val downloadSherpaOnnx by tasks.registering {
+	val dest = sherpaAar.asFile
+	val version = sherpaOnnxVersion
+	outputs.file(dest)
+	doLast {
+		if (dest.exists() && dest.length() > 0L) return@doLast
+		dest.parentFile.mkdirs()
+		val url = uri(
+			"https://github.com/k2-fsa/sherpa-onnx/releases/download/v$version/sherpa-onnx-$version.aar"
+		).toURL()
+		url.openStream().use { input ->
+			dest.outputStream().use { output -> input.copyTo(output) }
+		}
+	}
+}
+tasks.preBuild { dependsOn(downloadSherpaOnnx) }
+
 val CI_MODE = System.getenv("CI_MODE") == "true"
 val USE_JENKINS = System.getenv("USE_JENKINS") == "true"
 
@@ -43,6 +64,11 @@ android {
 
 		vectorDrawables {
 			useSupportLibrary = true
+		}
+
+		ndk {
+			// sherpa-onnx native libs. x86 is omitted; x86_64 covers the emulator.
+			abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
 		}
 	}
 
@@ -373,4 +399,7 @@ dependencies {
 	coreLibraryDesugaring(libs.desugar)
 
 	implementation(libs.bottomsheetdialog)
+
+	implementation(libs.commons.compress)
+	implementation(files(sherpaAar.asFile))
 }
