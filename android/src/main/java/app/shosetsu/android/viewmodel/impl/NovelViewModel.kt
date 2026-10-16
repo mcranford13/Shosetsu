@@ -616,6 +616,19 @@ class NovelViewModel(
 		}
 	}
 
+	override fun markRangeAs(first: Int, last: Int, readingStatus: ReadingStatus) {
+		launchIO {
+			val chapters = chaptersLive.value.sortedBy { it.order }
+			if (chapters.isEmpty()) return@launchIO
+
+			val start = minOf(first, last).coerceIn(1, chapters.size)
+			val end = maxOf(first, last).coerceIn(1, chapters.size)
+			val ids = chapters.subList(start - 1, end).map { it.id }
+			chapterRepo.updateChapterReadingStatus(ids, readingStatus)
+			clearSelected()
+		}
+	}
+
 	override fun removeBookmarkFromSelected() {
 		launchIO {
 			chapterRepo.updateChapterBookmark(getSelectedIds(), false)
