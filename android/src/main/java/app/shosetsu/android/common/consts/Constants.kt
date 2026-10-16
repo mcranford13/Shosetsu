@@ -93,7 +93,13 @@ const val URL_HELP_CSS = "https://shosetsu.app/help/guides/css.html"
 const val URL_WEBSITE = "https://shosetsu.app"
 const val URL_PRIVACY = "https://shosetsu.app/privacy"
 const val URL_DISCLAIMER = "https://shosetsu.app/disclaimer"
-const val URL_APP_REPO = "https://gitlab.com/shosetsuorg/shosetsu"
+const val URL_APP_REPO = "https://github.com/mcranford13/Shosetsu"
+
+/**
+ * Releases list for the standard build's in-app updater.
+ * Not a single tag, so later GitHub releases are picked up on their own.
+ */
+const val URL_APP_RELEASES = "https://api.github.com/repos/mcranford13/Shosetsu/releases"
 const val URL_EXTENSIONS_REPO = "https://gitlab.com/shosetsuorg/extensions"
 const val URL_PATREON = "https://www.patreon.com/doomsdayrs"
 const val URL_KOFI = "https://ko-fi.com/doomsdayrs"
