@@ -1,77 +1,38 @@
-# Shosetsu
+# Shosetsu Audiobook
 
-The Free & Open Source Android Application for reading (Light) Novels!
+An unofficial fork of [Shosetsu](https://gitlab.com/shosetsuorg/shosetsu), the free and open source Android app for reading light novels.
 
-We appreciate any help in improving the app, so let us know by [opening an issue](../../issues/new).
+This fork adds on-device audiobook narration with distinct character voices, plus a few reading and update conveniences. It is maintained separately from the official project. Please report fork-specific problems in [this repository's issues](https://github.com/mcranford13/Shosetsu/issues), not to the upstream Shosetsu team.
 
-## Download:
+## Download
 
-| Direct                                                                    | F-Droid                                                                                                         | Uptodown                                                                                                              |
-|---------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| [<img src="shosetsu-logo.svg" alt="Direct Download" height="80">][Latest] | [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">][F-Droid] | [<img src="https://stc.utdstc.com/img/mediakit/download-gio-big.png" alt="Get it on uptodown" height="80">][uptodown] |
+Get the latest signed APK from [GitHub Releases][Latest].
 
-## Capabilities:
+This build uses the same package id as official Shosetsu (`app.shosetsu.android`) but a different signing key. Uninstall an official Shosetsu install before installing this fork. Once installed, later releases from this repository can update in place from inside the app.
 
-- [x] Many sources to read from!
-- [x] Add the ones you like to your library!
-- [x] Single button press to get all the latest chapters!
-- [x] Settings that make you wonder what happened!
-- [x] Completely customizable reader! [1]
-- [x] Awesome UI!
-- [x] Fast fast fast!
+Voice models are not bundled in the APK. Download them in the app under **Settings → Reader → On-device voice packs**.
 
-[1] Using HTML reader
+## What this fork adds
 
-## Community
+### Audiobook narration
 
-| Matrix                                                                                                                                                                                 | Discord                                                                                                                                                   |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| <a href="https://matrix.to/#/#shosetsu:matrix.org"><img src="https://raw.githubusercontent.com/shosetsuorg/shosetsu/development/matrix%20logo.svg" alt="Matrix Space" width=240px></a> | <a href="https://discord.gg/ttSX7gB"><img src="https://discordapp.com/assets/e4923594e694a21542a489471ecffa50.svg" alt="Discord Channel" width=240px></a> |
+- **On-device neural voices.** Read chapters with downloadable [Piper](https://github.com/rhasspy/piper) voices or the higher-quality Kokoro voice pack, powered by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Narration runs offline once a pack is downloaded. The Android system voice is still available and remains the fallback.
+- **Character voices.** Dialogue is detected from quotation marks and speech tags such as `Clara said` or `Clara: "..."`, and each speaker can be assigned a different voice. Narration and unidentified speakers have their own default voices.
+- **A cast remembered per novel.** Voice assignments are saved for each novel, so a character keeps the same voice across chapters. Open the cast sheet from the reader to change who sounds like whom.
+- **More natural pacing.** Paragraphs are spoken one sentence at a time, upcoming sentences are prepared while the current one plays, and sentences finish before the next begins. Pauses between lines and between paragraphs are adjustable in reader settings.
+- **Listening with the screen off.** Narration keeps playing when the phone is locked. A media notification shows the chapter and current speaker, and can pause, resume, or stop playback.
+- **Voice pack management.** Download and remove voice packs and the shared phoneme data from their own settings screen.
 
-## Screenshots:
+### Reading and library
 
-### Your own catalog!
+- **Mark a chapter range.** From a novel's menu, choose **Mark chapter range** and enter a first and last chapter position to mark that span as read or unread, instead of selecting each chapter by hand.
 
-<p align="center">
-    <img src="./screenshots/shosetsu-library.png" width="50%"></img>
-</p>
+### Updates
 
-### Novels!
+- **Updates from this fork.** The standard app checks this repository's GitHub releases for updates and installs the signed standard APK in place, keeping your library.
 
-<p align="center">
-    <img src="./screenshots/shosetsu-novel-info.png" width="50%"></img>
-    <img src="./screenshots/shosetsu-reader-html-plain.png" width="50%"></img>
-</p>
+## License
 
-### Customization!
+This fork retains Shosetsu's [GNU General Public License v3.0](LICENSE).
 
-<p align="center">
-    <img src="./screenshots/shosetsu-reader-html-custom.png" width="50%"></img>
-</p>
-Thank you Sweet0Potato#9784 for the CSS
-
-### Sources for all!
-
-<p align="center">
-    <img src="./screenshots/shosetsu-browse.png" width="50%"></img>
-    <img src="./screenshots/shosetsu-browse-royalroad.png" width="50%"></img>
-</p>
-
-### Downloading!
-
-<p align="center">
-    <img src="./screenshots/shosetsu-download.png" width="50%"></img>
-</p>
-
-### Keep track!
-
-<p align="center">
-    <img src="./screenshots/shosetsu-updates.png" width="50%"></img>
-</p>
-
-
-[Latest]: https://gitlab.com/shosetsuorg/shosetsu/-/releases/permalink/latest
-
-[F-Droid]: https://f-droid.org/packages/app.shosetsu.android.fdroid
-
-[uptodown]: https://shosetsu.en.uptodown.com/android
+[Latest]: https://github.com/mcranford13/Shosetsu/releases/latest
