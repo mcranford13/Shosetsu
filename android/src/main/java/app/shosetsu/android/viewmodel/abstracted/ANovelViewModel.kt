@@ -195,6 +195,7 @@ abstract class ANovelViewModel
 	abstract fun downloadSelected()
 	abstract fun deleteSelected()
 	abstract fun markSelectedAs(readingStatus: ReadingStatus)
+	abstract fun markRangeAs(first: Int, last: Int, readingStatus: ReadingStatus)
 	abstract fun selectBetween()
 
 	abstract fun trueDeleteSelected()

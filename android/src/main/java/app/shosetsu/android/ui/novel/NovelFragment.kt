@@ -201,6 +201,7 @@ fun NovelInfoView(
 	val hostState = remember { SnackbarHostState() }
 	val context = LocalContext.current
 	val resources = LocalResources.current
+	var showChapterRangeDialog by remember { mutableStateOf(false) }
 
 	NovelViewExceptionConsumer(viewModel, hostState, exceptionSnackbarModel)
 
@@ -274,6 +275,7 @@ fun NovelInfoView(
 		onMigrate = {
 			onMigrate(novelId)
 		},
+		onMarkRange = { showChapterRangeDialog = true },
 		hasCategories = categories.isNotEmpty(),
 		onSetCategories = viewModel::showCategoriesDialog,
 		onDownloadNext = viewModel::downloadNextChapter,
@@ -287,6 +289,14 @@ fun NovelInfoView(
 		onOpenShareMenu = viewModel::openShareMenu,
 		hostState = hostState
 	)
+
+	if (showChapterRangeDialog && chapters.isNotEmpty()) {
+		NovelChapterRangeDialog(
+			chapterCount = chapters.size,
+			onDismissRequest = { showChapterRangeDialog = false },
+			onMark = viewModel::markRangeAs,
+		)
+	}
 
 	if (isCategoriesDialogVisible)
 		CategoriesDialog(
@@ -646,6 +656,7 @@ fun PreviewNovelInfoContent() {
 			onTrueDelete = {},
 			canMigrate = false,
 			onMigrate = {},
+			onMarkRange = {},
 			hasCategories = false,
 			onSetCategories = {},
 			onDownloadNext = {},
@@ -693,6 +704,7 @@ fun NovelInfoContent(
 	onTrueDelete: () -> Unit,
 	canMigrate: Boolean,
 	onMigrate: () -> Unit,
+	onMarkRange: () -> Unit,
 	hasCategories: Boolean,
 	onSetCategories: () -> Unit,
 	onDownloadNext: () -> Unit,
@@ -735,6 +747,7 @@ fun NovelInfoContent(
 				canMigrate = canMigrate,
 				onMigrate = onMigrate,
 				onJump = openChapterJump,
+				onMarkRange = onMarkRange,
 				hasCategories = hasCategories,
 				onSetCategories = onSetCategories,
 				onDownloadNext = onDownloadNext,

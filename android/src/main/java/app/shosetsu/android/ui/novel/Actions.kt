@@ -142,6 +142,7 @@ fun NovelDownloadButton(
 fun NovelMoreButton(
 	onMigrate: () -> Unit,
 	onJump: () -> Unit,
+	onMarkRange: () -> Unit,
 	onSetCategories: () -> Unit,
 	canMigrate: Boolean,
 	hasCategories: Boolean
@@ -164,6 +165,16 @@ fun NovelMoreButton(
 		onClick = {
 			onDismissRequest()
 			onJump()
+		}
+	)
+
+	DropdownMenuItem(
+		text = {
+			Text(stringResource(R.string.fragment_novel_mark_range))
+		},
+		onClick = {
+			onDismissRequest()
+			onMarkRange()
 		}
 	)
 

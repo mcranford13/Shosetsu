@@ -44,6 +44,7 @@ fun NovelAppBar(
 	canMigrate: Boolean,
 	onMigrate: () -> Unit,
 	onJump: () -> Unit,
+	onMarkRange: () -> Unit,
 
 	hasCategories: Boolean,
 	onSetCategories: () -> Unit,
@@ -90,6 +91,7 @@ fun NovelAppBar(
 					canMigrate = canMigrate,
 					onMigrate = onMigrate,
 					onJump = onJump,
+					onMarkRange = onMarkRange,
 					hasCategories = hasCategories,
 					onSetCategories = onSetCategories
 				)
