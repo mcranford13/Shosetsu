@@ -74,31 +74,33 @@ class AppUpdatesRepository(
 
 	private fun compareVersion(newVersion: AppUpdateEntity): Int {
 		when (flavor()) {
-			ProductFlavors.UP_TO_DOWN -> {
-				val currentVersion = Version(BuildConfig.VERSION_NAME.substringBefore("-"))
-				val remoteVersion = Version(
-					newVersion.version.substringBefore("-").substringAfter("v")
-				)
+			// GitHub release tags are version names (v2.5.3-audiobook), not version codes.
+			ProductFlavors.STANDARD -> return compareReleaseVersion(newVersion)
 
-				return remoteVersion.compareTo(currentVersion)
-			}
+			ProductFlavors.UP_TO_DOWN -> return compareReleaseVersion(newVersion)
 
 			else -> {
-				val currentVersion: Int
-				val remoteVersion: Int
-
-				// Assuming update will return a dev update for debug, only on standard
-				if (flavor() == ProductFlavors.STANDARD && BuildConfig.DEBUG) {
-					currentVersion = BuildConfig.VERSION_NAME.substringAfter("-").toInt()
-					remoteVersion = newVersion.commit.takeIf { it != -1 } ?: newVersion.version.toInt()
-				} else {
-					currentVersion = BuildConfig.VERSION_CODE
-					remoteVersion = newVersion.versionCode
-				}
-
+				val currentVersion = BuildConfig.VERSION_CODE
+				val remoteVersion = newVersion.versionCode
 				return remoteVersion.compareTo(currentVersion)
 			}
 		}
+	}
+
+	/**
+	 * Compare the numeric version in the release name (text before the first '-').
+	 * When those match, a higher Android versionCode still counts as an update.
+	 */
+	private fun compareReleaseVersion(newVersion: AppUpdateEntity): Int {
+		val currentVersion = Version(BuildConfig.VERSION_NAME.substringBefore("-"))
+		val remoteVersion = Version(
+			newVersion.version.substringBefore("-").substringAfter("v")
+		)
+		val byName = remoteVersion.compareTo(currentVersion)
+		if (byName != 0 || flavor() != ProductFlavors.STANDARD || newVersion.versionCode < 0) {
+			return byName
+		}
+		return newVersion.versionCode.compareTo(BuildConfig.VERSION_CODE)
 	}
 
 	@Throws(FilePermissionException::class, IOException::class, HTTPException::class)
