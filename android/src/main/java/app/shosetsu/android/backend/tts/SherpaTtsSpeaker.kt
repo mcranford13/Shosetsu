@@ -50,8 +50,7 @@ class SherpaTtsSpeaker(
 	private val packs: VoicePackManager,
 ) : AudiobookSpeaker {
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-	private val sessions = ArrayList<Session>(2)
-	private val sessionLock = Any()
+	private val sessions = PinnedLruCache<String, OfflineTts>(maxSize = 2) { it.release() }
 	private val cacheLock = Any()
 	private val stopRequested = AtomicBoolean(false)
 	private val activeTrack = AtomicReference<AudioTrack?>(null)
@@ -59,7 +58,6 @@ class SherpaTtsSpeaker(
 	private val cache = LinkedHashMap<String, CachedAudio>()
 	private val inflight = HashSet<String>()
 
-	private class Session(val modelId: String, val tts: OfflineTts, var lastUsed: Long)
 	private class CachedAudio(val samples: FloatArray, val sampleRate: Int)
 
 	override fun prefetch(request: SpeechRequest) {
@@ -147,45 +145,21 @@ class SherpaTtsSpeaker(
 	fun shutdown() {
 		stop()
 		scope.coroutineContext[Job]?.cancel()
-		synchronized(sessionLock) {
-			sessions.forEach { it.tts.release() }
-			sessions.clear()
-		}
+		sessions.close()
 	}
 
 	private fun synthesize(request: SpeechRequest): GeneratedAudio {
 		val voice = packs.definition(request.packId)
-		val tts = session(voice.modelKey())
-		synchronized(tts) {
-			return tts.generate(
-				text = request.text,
-				sid = voice.speakerId,
-				speed = request.speed.coerceIn(0.1f, 3f),
-			)
-		}
-	}
-
-	private fun session(modelId: String): OfflineTts {
-		synchronized(sessionLock) {
-			sessions.find { it.modelId == modelId }?.let {
-				it.lastUsed = System.nanoTime()
-				return it.tts
+		sessions.acquire(voice.modelKey()) {
+			OfflineTts(assetManager = null, config = config(voice.modelKey()))
+		}.use { session ->
+			synchronized(session.value) {
+				return session.value.generate(
+					text = request.text,
+					sid = voice.speakerId,
+					speed = request.speed.coerceIn(0.1f, 3f),
+				)
 			}
-		}
-		val created = OfflineTts(assetManager = null, config = config(modelId))
-		synchronized(sessionLock) {
-			sessions.find { it.modelId == modelId }?.let {
-				created.release()
-				it.lastUsed = System.nanoTime()
-				return it.tts
-			}
-			while (sessions.size >= 2) {
-				val victim = sessions.minBy { it.lastUsed }
-				victim.tts.release()
-				sessions.remove(victim)
-			}
-			sessions += Session(modelId, created, System.nanoTime())
-			return created
 		}
 	}
 

@@ -76,6 +76,8 @@ import app.shosetsu.lib.exceptions.HTTPException
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import org.kodein.di.DI
 import org.kodein.di.DIAware
@@ -224,7 +226,8 @@ class NovelUpdateWorker(
 			var progress = 0
 
 			for (nE in novels) {
-				if (isStopped) break
+				currentCoroutineContext().ensureActive()
+				if (isStopped) return Result.failure()
 
 				val style = notificationStyle()
 				val title: String =
@@ -307,7 +310,7 @@ class NovelUpdateWorker(
 				} catch (e: Exception) {
 					if (e is CancellationException) {
 						logE("Job was canceled", e)
-						continue
+						throw e
 					}
 					logE("Failed to load novel: $nE", e)
 					notify(
@@ -343,6 +346,8 @@ class NovelUpdateWorker(
 				progress++
 			}
 
+			currentCoroutineContext().ensureActive()
+			if (isStopped) return Result.failure()
 			if (categoryID < 0) setLastUpdatedTimestamp(Instant.now().toEpochMilli())
 
 			notify(R.string.update_complete) {

@@ -44,7 +44,25 @@ interface DownloadsDao : BaseDao<DBDownloadEntity> {
 	suspend fun loadFirstDownload(): DBDownloadEntity?
 
 	@Throws(SQLiteException::class)
-	@Query("SELECT COUNT(*) FROM downloads WHERE status == 0")
+	@Query("SELECT * FROM downloads WHERE status IN (0, 3)")
+	suspend fun loadPendingDownloads(): List<DBDownloadEntity>
+
+	/**
+	 * Atomically claims a queued chapter. The affected-row count tells callers
+	 * whether another worker claimed it first.
+	 */
+	@Throws(SQLiteException::class)
+	@Query(
+		"""
+			UPDATE downloads
+				SET status = 1
+			WHERE chapterID = :chapterID AND status IN (0, 3)
+		"""
+	)
+	suspend fun claimDownload(chapterID: Int): Int
+
+	@Throws(SQLiteException::class)
+	@Query("SELECT COUNT(*) FROM downloads WHERE status IN (0, 1, 3)")
 	suspend fun loadDownloadCount(): Int
 
 	@Throws(SQLiteException::class)
@@ -88,4 +106,7 @@ interface DownloadsDao : BaseDao<DBDownloadEntity> {
 		"""
 	)
 	suspend fun setAllPending()
+
+	@Query("UPDATE downloads SET status = 0 WHERE status IN (1, 3)")
+	suspend fun resetInterruptedDownloads()
 }

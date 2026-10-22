@@ -32,7 +32,6 @@ val downloadSherpaOnnx by tasks.registering {
 }
 tasks.preBuild { dependsOn(downloadSherpaOnnx) }
 
-val CI_MODE = System.getenv("CI_MODE") == "true"
 val USE_JENKINS = System.getenv("USE_JENKINS") == "true"
 
 android {
@@ -95,8 +94,8 @@ android {
 
 	buildTypes {
 		named("release") {
-			isMinifyEnabled = !CI_MODE
-			isShrinkResources = !CI_MODE
+			isMinifyEnabled = true
+			isShrinkResources = true
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"
@@ -108,8 +107,8 @@ android {
 			versionNameSuffix = Git.open(rootProject.projectDir.resolve(".git")).use { "-${it.getCommitCount()}" }
 			applicationIdSuffix = ".debug"
 			isDebuggable = true
-			isMinifyEnabled = !CI_MODE
-			isShrinkResources = !CI_MODE
+			isMinifyEnabled = false
+			isShrinkResources = false
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"
@@ -178,8 +177,8 @@ android {
 	}
 
 	lint {
-		disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
-		abortOnError = false
+		disable.addAll(listOf("MissingTranslation", "ExtraTranslation", "MissingQuantity"))
+		abortOnError = true
 	}
 	namespace = "app.shosetsu.android"
 	packaging {

@@ -41,6 +41,12 @@ interface IDownloadsRepository {
 	@Throws(SQLiteException::class)
 	suspend fun loadFirstDownload(): DownloadEntity?
 
+	@Throws(SQLiteException::class)
+	suspend fun loadPendingDownloads(): List<DownloadEntity>
+
+	@Throws(SQLiteException::class)
+	suspend fun claimDownload(chapterID: Int): Boolean
+
 	/**
 	 * Queries for the download count
 	 */
@@ -94,4 +100,7 @@ interface IDownloadsRepository {
 	 */
 	@Throws(SQLiteException::class)
 	suspend fun setAllPending()
+
+	@Throws(SQLiteException::class)
+	suspend fun resetInterruptedDownloads()
 }

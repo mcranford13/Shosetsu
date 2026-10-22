@@ -50,7 +50,7 @@ class GitAppUpdateDataSource(
 	}
 
 	@Serializable
-	private data class GitHubRelease(
+	internal data class GitHubRelease(
 		@SerialName("tag_name")
 		val tagName: String = "",
 		val body: String? = null,
@@ -62,7 +62,7 @@ class GitAppUpdateDataSource(
 	)
 
 	@Serializable
-	private data class GitHubAsset(
+	internal data class GitHubAsset(
 		val name: String = "",
 		@SerialName("browser_download_url")
 		val browserDownloadUrl: String = "",
@@ -106,14 +106,14 @@ class GitAppUpdateDataSource(
 		}
 	}
 
-	private fun GitHubRelease.toUpdate(asset: GitHubAsset) = AppUpdateEntity(
+	internal fun GitHubRelease.toUpdate(asset: GitHubAsset) = AppUpdateEntity(
 		version = tagName.removePrefix("v").removePrefix("V"),
 		versionCode = versionCodeFrom(body),
 		url = asset.browserDownloadUrl,
 		notes = body.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() },
 	)
 
-	private fun chooseRelease(
+	internal fun chooseRelease(
 		releases: List<GitHubRelease>
 	): Pair<GitHubRelease, GitHubAsset>? {
 		var best: Triple<GitHubRelease, GitHubAsset, Version>? = null
@@ -160,7 +160,7 @@ class GitAppUpdateDataSource(
 			"x8664",
 		)
 
-		private fun versionCodeFrom(body: String?): Int =
+		internal fun versionCodeFrom(body: String?): Int =
 			body?.let { versionCodePattern.find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
 				?: -1
 

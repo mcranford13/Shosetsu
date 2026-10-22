@@ -488,7 +488,6 @@ class CatalogViewModel(
 	override fun destroy() {
 		extensionIDFlow.value = -1
 		resetView()
-		System.gc()
 	}
 
 	/**

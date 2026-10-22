@@ -56,9 +56,6 @@ class ElementToTTSTextIterator(
 	override fun recreate() {
 		// Create our new model
 		model = modelFactory()
-
-		// clean up memory fast!!!
-		System.gc()
 	}
 
 	/**

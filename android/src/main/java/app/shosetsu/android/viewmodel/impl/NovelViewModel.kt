@@ -12,6 +12,7 @@ import app.shosetsu.android.common.RefreshException
 import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.enums.ChapterSortType
 import app.shosetsu.android.common.enums.ReadingStatus
+import app.shosetsu.android.common.utils.selectChapterRange
 import app.shosetsu.android.common.ext.launchIO
 import app.shosetsu.android.common.ext.logD
 import app.shosetsu.android.common.ext.logE
@@ -618,12 +619,9 @@ class NovelViewModel(
 
 	override fun markRangeAs(first: Int, last: Int, readingStatus: ReadingStatus) {
 		launchIO {
-			val chapters = chaptersLive.value.sortedBy { it.order }
-			if (chapters.isEmpty()) return@launchIO
-
-			val start = minOf(first, last).coerceIn(1, chapters.size)
-			val end = maxOf(first, last).coerceIn(1, chapters.size)
-			val ids = chapters.subList(start - 1, end).map { it.id }
+			val ids = selectChapterRange(chaptersLive.value, first, last) { it.order }
+				.map { it.id }
+			if (ids.isEmpty()) return@launchIO
 			chapterRepo.updateChapterReadingStatus(ids, readingStatus)
 			clearSelected()
 		}

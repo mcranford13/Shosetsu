@@ -84,7 +84,13 @@ class MainViewModel(
 	}
 
 	override fun dismissUpdateDialog() {
+		val dismissedVersion = appUpdate.value?.version
 		appUpdate.value = null
+		if (dismissedVersion != null) {
+			launchIO {
+				settingsRepository.setString(SettingKey.DismissedUpdateVersion, dismissedVersion)
+			}
+		}
 	}
 
 	override fun dismissVerificationWarning() {
@@ -97,7 +103,8 @@ class MainViewModel(
 		launchIO {
 			// Pass updates to UI
 			appUpdateRepo.appUpdate.collect { it ->
-				appUpdate.emit(it)
+				val dismissed = settingsRepository.getString(SettingKey.DismissedUpdateVersion)
+				appUpdate.emit(it?.takeUnless { update -> update.version == dismissed })
 			}
 		}
 	}

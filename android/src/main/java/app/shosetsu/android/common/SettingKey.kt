@@ -227,6 +227,7 @@ sealed class SettingKey<T : Any>(val name: String, val default: T) {
 
 	object AppUpdateOnlyWhenIdle : BooleanKey("appUpdateIdle", false)
 	object AppUpdateCycle : IntKey("appUpdateCycle", 12)
+	object DismissedUpdateVersion : StringKey("dismissedUpdateVersion", "")
 
 
 	// View options

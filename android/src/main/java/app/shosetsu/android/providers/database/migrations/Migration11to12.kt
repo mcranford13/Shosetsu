@@ -4,6 +4,17 @@ import android.database.SQLException
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+internal const val CREATE_NOVEL_VOICE_CAST_TABLE_SQL = """
+	CREATE TABLE IF NOT EXISTS `novel_voice_cast` (
+		`novelId` INTEGER NOT NULL,
+		`characterKey` TEXT NOT NULL,
+		`displayName` TEXT NOT NULL,
+		`voicePackId` TEXT NOT NULL,
+		PRIMARY KEY(`novelId`, `characterKey`),
+		FOREIGN KEY(`novelId`) REFERENCES `novels`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+	)
+"""
+
 /*
  * This file is part of shosetsu.
  *
@@ -24,17 +35,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 object Migration11to12 : Migration(11, 12) {
 	@Throws(SQLException::class)
 	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
-			CREATE TABLE IF NOT EXISTS `novel_voice_cast` (
-				`novelId` INTEGER NOT NULL,
-				`characterKey` TEXT NOT NULL,
-				`displayName` TEXT NOT NULL,
-				`voicePackId` TEXT NOT NULL,
-				PRIMARY KEY(`novelId`, `characterKey`),
-				FOREIGN KEY(`novelId`) REFERENCES `novels`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-			)
-			""".trimIndent()
-		)
+		db.execSQL(CREATE_NOVEL_VOICE_CAST_TABLE_SQL.trimIndent())
 	}
 }

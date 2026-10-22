@@ -89,6 +89,14 @@
 	<string name="reader_tts_speaking">Speaking: %1$s</string>
 	<string name="reader_tts_paused">Paused</string>
 	<string name="reader_tts_stop">Stop</string>
+	<string name="reader_action_back">Back</string>
+	<string name="reader_action_focus">Toggle focus mode</string>
+	<string name="reader_action_bookmark">Toggle chapter bookmark</string>
+	<string name="reader_action_rotation">Toggle rotation lock</string>
+	<string name="reader_action_play">Start narration</string>
+	<string name="reader_action_pause">Pause narration</string>
+	<string name="reader_action_navigation">Show chapter navigation</string>
+	<string name="reader_action_sheet">Expand or collapse reader settings</string>
 	<string name="reader_tts_test_narration">The afternoon was quiet in the library.</string>
 	<string name="reader_tts_test_dialogue">Hello. This is a different voice.</string>
 	<string name="reader_tts_about_size">About %1$d MB</string>

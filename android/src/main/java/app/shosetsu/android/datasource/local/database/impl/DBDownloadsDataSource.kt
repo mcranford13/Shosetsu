@@ -46,6 +46,14 @@ class DBDownloadsDataSource(
 		downloadsDao.loadFirstDownload()?.convertTo()
 
 	@Throws(SQLiteException::class)
+	override suspend fun loadPendingDownloads(): List<DownloadEntity> =
+		downloadsDao.loadPendingDownloads().convertList()
+
+	@Throws(SQLiteException::class)
+	override suspend fun claimDownload(chapterID: Int): Boolean =
+		downloadsDao.claimDownload(chapterID) == 1
+
+	@Throws(SQLiteException::class)
 	override suspend fun insertDownload(downloadEntity: DownloadEntity): Long =
 		(downloadsDao.insertIgnore(downloadEntity.toDB()))
 
@@ -79,5 +87,10 @@ class DBDownloadsDataSource(
 	@Throws(SQLiteException::class)
 	override suspend fun setAllPending() {
 		downloadsDao.setAllPending()
+	}
+
+	@Throws(SQLiteException::class)
+	override suspend fun resetInterruptedDownloads() {
+		downloadsDao.resetInterruptedDownloads()
 	}
 }
