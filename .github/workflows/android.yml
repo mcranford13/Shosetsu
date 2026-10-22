@@ -24,7 +24,8 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
+      # v3 installs the SDK "tools" package, which Google no longer publishes.
+      - uses: android-actions/setup-android@v4
 
       - name: Install Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;37.0.0"

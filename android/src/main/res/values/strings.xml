@@ -161,6 +161,7 @@
 	<!-- App Update -->
 	<string name="notification_app_update_check">App Update Check</string>
 	<string name="notification_app_update_available_version">%s update available</string>
+	<string name="notification_app_update_up_to_date">Shosetsu %s is up to date</string>
 
 	<string name="notification_app_update_install_title">App Update Install</string>
 	<string name="notification_app_update_loading">Loading app update</string>

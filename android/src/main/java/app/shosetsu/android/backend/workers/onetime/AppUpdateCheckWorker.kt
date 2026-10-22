@@ -18,6 +18,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Operation
 import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
+import app.shosetsu.android.BuildConfig
 import app.shosetsu.android.R
 import app.shosetsu.android.activity.MainActivity
 import app.shosetsu.android.backend.workers.CoroutineWorkerManager
@@ -136,7 +137,16 @@ class AppUpdateCheckWorker(
 		}
 
 		if (entity == null) {
-			notificationManager.cancel(defaultNotificationID)
+			notify(
+				applicationContext.getString(
+					R.string.notification_app_update_up_to_date,
+					BuildConfig.VERSION_NAME
+				)
+			) {
+				setOngoing(false)
+				setAutoCancel(true)
+				setTimeoutAfter(10_000)
+			}
 		} else {
 			notify(
 				applicationContext.getString(
