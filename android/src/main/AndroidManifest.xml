@@ -11,6 +11,7 @@
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 	<uses-permission android:name="android.permission.INSTALL_SHORTCUT" />
@@ -67,6 +68,16 @@
 			android:name=".backend.tts.NarrationService"
 			android:exported="false"
 			android:foregroundServiceType="mediaPlayback" />
+
+		<!--
+		  Chapter downloads call setForeground(). targetSdk 34+ rejects a foreground
+		  service whose type is missing both here and at the startForeground() call.
+		-->
+		<service
+			android:name="androidx.work.impl.foreground.SystemForegroundService"
+			android:exported="false"
+			android:foregroundServiceType="dataSync"
+			tools:node="merge" />
 
 		<service
 			android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
