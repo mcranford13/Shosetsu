@@ -73,6 +73,7 @@ import app.shosetsu.android.ui.theme.FallbackColorScheme
 import app.shosetsu.android.view.uimodels.model.ExceptionSnackbarModel
 import app.shosetsu.android.view.uimodels.model.NovelReaderSettingUI
 import app.shosetsu.android.view.uimodels.model.reader.ChapterPassage
+import app.shosetsu.android.view.uimodels.model.reader.CharacterGender
 import app.shosetsu.android.view.uimodels.model.reader.ElementToTTSTextIterator
 import app.shosetsu.android.view.uimodels.model.reader.LazyTTSText
 import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem
@@ -1000,7 +1001,15 @@ class ChapterReaderViewModel(
 				.filter { it.status == app.shosetsu.android.backend.tts.DownloadStatus.Ready }
 				.map { voice ->
 					val quality = if (voice.engine == VoiceEngine.KOKORO) "Kokoro" else "Piper"
-					ReaderVoiceOption(voice.id, "${voice.name} · $quality (${voice.language})")
+					val gender = when (voice.gender) {
+						CharacterGender.FEMALE -> "Female"
+						CharacterGender.MALE -> "Male"
+						CharacterGender.UNKNOWN -> "Unspecified"
+					}
+					ReaderVoiceOption(
+						voice.id,
+						"${voice.name} · $gender · $quality (${voice.language})",
+					)
 				}
 		}.stateIn(viewModelScopeIO, SharingStarted.WhileSubscribed(5_000), emptyList())
 	}
@@ -1232,6 +1241,7 @@ class ChapterReaderViewModel(
 				novelIDLive.value,
 				segment.characterKey,
 				segment.displayName,
+				segment.gender,
 			).voicePackId
 		}
 
@@ -1247,7 +1257,12 @@ class ChapterReaderViewModel(
 				.firstOrNull { it is ChapterPassage.Success } as? ChapterPassage.Success
 				?: return@launch
 			val rows = passage.segments.distinctBy { it.characterKey }.map { segment ->
-				val saved = voiceCast.resolve(novelId, segment.characterKey, segment.displayName)
+				val saved = voiceCast.resolve(
+					novelId,
+					segment.characterKey,
+					segment.displayName,
+					segment.gender,
+				)
 				ReaderVoiceCast(saved.characterKey, saved.displayName, saved.voicePackId)
 			}
 			castMembers.value = rows.sortedWith(

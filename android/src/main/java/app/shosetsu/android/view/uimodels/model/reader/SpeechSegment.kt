@@ -26,6 +26,12 @@ data class SegmentSource(
 	val text: String,
 )
 
+enum class CharacterGender {
+	UNKNOWN,
+	FEMALE,
+	MALE,
+}
+
 /**
  * A stretch of chapter text spoken in one voice.
  *
@@ -40,6 +46,7 @@ data class SpeechSegment(
 	val characterKey: String,
 	val displayName: String,
 	val dialogue: Boolean,
+	val gender: CharacterGender = CharacterGender.UNKNOWN,
 )
 
 data class ReaderVoiceCast(

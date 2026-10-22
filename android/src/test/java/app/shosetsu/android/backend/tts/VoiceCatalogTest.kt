@@ -1,6 +1,7 @@
 package app.shosetsu.android.backend.tts
 
 import kotlinx.serialization.json.Json
+import app.shosetsu.android.view.uimodels.model.reader.CharacterGender
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +46,10 @@ class VoiceCatalogTest {
 				voice.engine == VoiceEngine.PIPER || voice.engine == VoiceEngine.KOKORO,
 			)
 			assertTrue("${voice.id} has a negative speaker ID", voice.speakerId >= 0)
+			assertTrue(
+				"${voice.id} has no gender metadata",
+				voice.gender != CharacterGender.UNKNOWN,
+			)
 		}
 		assertTrue("espeak-ng-data must have a positive download size", catalog.espeakNgData.sizeMb > 0)
 		assertTrue("espeak-ng-data has an invalid URL", isHttpsUrl(catalog.espeakNgData.url))

@@ -23,4 +23,27 @@ class SpeechChunkerTest {
 		assertEquals(true, chunks.size > 1)
 		assertEquals(true, chunks.all { it.length <= 420 })
 	}
+
+	@Test
+	fun removesBracketControlsButKeepsTheirWords() {
+		assertEquals(
+			listOf("The sign read Hello aloud."),
+			SpeechChunker.chunks("The sign read [Hello] aloud."),
+		)
+		assertEquals(listOf("Hello"), SpeechChunker.chunks("[Hello"))
+		assertEquals(listOf("Hello"), SpeechChunker.chunks("]Hello["))
+		assertEquals(listOf("Warning She ran."), SpeechChunker.chunks("【Warning】 She ran."))
+	}
+
+	@Test
+	fun removesBracketedCitationMarkers() {
+		assertEquals(listOf("See and go."), SpeechChunker.chunks("See [1] and go."))
+		assertEquals(listOf("Continue."), SpeechChunker.chunks("Continue. 【*】"))
+	}
+
+	@Test
+	fun nestedBracketsCannotEnterEspeakPhonemeMode() {
+		val chunks = SpeechChunker.chunks("[[h@'loU]]")
+		assertEquals(listOf("h@'loU"), chunks)
+	}
 }
