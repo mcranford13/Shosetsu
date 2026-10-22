@@ -3,6 +3,7 @@ package app.shosetsu.android.backend.workers.onetime
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.database.sqlite.SQLiteException
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
@@ -44,6 +45,7 @@ import app.shosetsu.android.common.enums.DownloadStatus
 import app.shosetsu.android.common.ext.actionBuilder
 import app.shosetsu.android.common.ext.getString
 import app.shosetsu.android.common.ext.launchIO
+import app.shosetsu.android.common.ext.logE
 import app.shosetsu.android.common.ext.logI
 import app.shosetsu.android.common.ext.logV
 import app.shosetsu.android.common.ext.notificationBuilder
@@ -279,17 +281,35 @@ class DownloadWorker(
 		return finished
 	}
 
+	override suspend fun getForegroundInfo(): ForegroundInfo = downloadForegroundInfo()
+
+	/**
+	 * Promotion can be rejected when WorkManager starts this worker from the
+	 * background (Android 12+). Downloads still have to run in that case.
+	 */
+	private suspend fun promoteToForeground() {
+		try {
+			setForeground(downloadForegroundInfo())
+		} catch (e: IllegalStateException) {
+			logE("Continuing chapter downloads without a foreground service", e)
+		}
+	}
+
+	private fun downloadForegroundInfo(): ForegroundInfo {
+		val notification = baseNotificationBuilder
+			.setContentText("Downloading chapters")
+			.apply { addCancelAction() }
+			.build()
+		return ForegroundInfo(
+			defaultNotificationID,
+			notification,
+			downloadForegroundServiceType(SDK_INT),
+		)
+	}
+
 	override suspend fun doWork(): Result {
 		logI("Starting loop")
-		setForeground(
-			ForegroundInfo(
-				defaultNotificationID,
-				baseNotificationBuilder
-					.setContentText("Downloading chapters")
-					.apply { addCancelAction() }
-					.build()
-			)
-		)
+		promoteToForeground()
 		downloadsRepo.resetInterruptedDownloads()
 		if (isDownloadPaused())
 			logI("Loop Paused")
@@ -397,3 +417,15 @@ class DownloadWorker(
 		const val ACTION_CANCEL_CHAPTER_DOWNLOAD = "shosetsu_action_cancel_chapter_download"
 	}
 }
+
+/**
+ * Android 10+ requires the type passed to startForeground() to be declared on
+ * [androidx.work.impl.foreground.SystemForegroundService]. Zero is rejected once
+ * the app targets Android 14.
+ */
+internal fun downloadForegroundServiceType(sdkInt: Int): Int =
+	if (sdkInt >= VERSION_CODES.Q) {
+		ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+	} else {
+		0
+	}
