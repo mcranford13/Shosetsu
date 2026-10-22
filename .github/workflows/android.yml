@@ -30,5 +30,10 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;37.0.0"
 
-      - name: Verify tests, lint, and builds
-        run: ./gradlew :android:testStandardDebugUnitTest :android:lintStandardDebug :android:assembleStandardDebug :android:assembleStandardRelease --stacktrace
+      # Packaging the debug APK reads the sherpa and onnx libraries into the Gradle
+      # heap. Keep that off the release shrinker, which needs the same heap.
+      - name: Verify tests, lint, and the debug build
+        run: ./gradlew :android:testStandardDebugUnitTest :android:lintStandardDebug :android:assembleStandardDebug --stacktrace
+
+      - name: Verify the release build
+        run: ./gradlew :android:assembleStandardRelease --stacktrace
