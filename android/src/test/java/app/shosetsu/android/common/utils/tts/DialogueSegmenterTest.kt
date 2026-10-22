@@ -1,6 +1,7 @@
 package app.shosetsu.android.common.utils.tts
 
 import app.shosetsu.android.view.uimodels.model.reader.SegmentSource
+import app.shosetsu.android.view.uimodels.model.reader.CharacterGender
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -134,5 +135,59 @@ class DialogueSegmenterTest {
 			listOf(SegmentSource("a", """Alice said "Hi." Bob said "Hey." """))
 		)
 		assertEquals(listOf("alice", "bob"), segments.filter { it.dialogue }.map { it.characterKey })
+	}
+
+	@Test
+	fun cultivationTitlesShareTheCharactersCanonicalKey() {
+		val segments = DialogueSegmenter.segment(
+			listOf(
+				SegmentSource(
+					"a",
+					"""Master Sunless said "Wait." Sunless replied "I am waiting." Saint Sky Tide said "Go." """,
+				)
+			)
+		)
+		val spoken = segments.filter { it.dialogue }
+		assertEquals(listOf("sunless", "sunless", "sky tide"), spoken.map { it.characterKey })
+		assertEquals("Master Sunless", spoken[0].displayName)
+		assertEquals(CharacterGender.MALE, spoken[0].gender)
+		assertEquals(CharacterGender.UNKNOWN, spoken[2].gender)
+	}
+
+	@Test
+	fun squareBracketsMarkSpeechWithoutBeingSentToTts() {
+		val segments = DialogueSegmenter.segment(
+			listOf(SegmentSource("a", "Master Sunless said [Do not enter.]"))
+		)
+		val spoken = segments.single { it.dialogue }
+		assertEquals("sunless", spoken.characterKey)
+		assertEquals("Do not enter.", spoken.text)
+		assertEquals(CharacterGender.MALE, spoken.gender)
+	}
+
+	@Test
+	fun citationsNestedBracketsAndParagraphSpansAreNotDialogue() {
+		val citations = DialogueSegmenter.segment(
+			listOf(SegmentSource("a", "See note [12] and [[system message]]."))
+		)
+		assertTrue(citations.none { it.dialogue })
+
+		val paragraphs = DialogueSegmenter.segment(
+			listOf(
+				SegmentSource("a", "He saw [the"),
+				SegmentSource("b", "gate] later."),
+			)
+		)
+		assertTrue(paragraphs.none { it.dialogue })
+	}
+
+	@Test
+	fun pronounTagsInferGenderForTheNamedSpeaker() {
+		val segments = DialogueSegmenter.segment(
+			listOf(SegmentSource("a", """Sky Tide said "I will go," she added."""))
+		)
+		val spoken = segments.single { it.dialogue }
+		assertEquals("sky tide", spoken.characterKey)
+		assertEquals(CharacterGender.FEMALE, spoken.gender)
 	}
 }

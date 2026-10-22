@@ -1,6 +1,7 @@
 package app.shosetsu.android.backend.tts
 
 import android.content.Context
+import app.shosetsu.android.view.uimodels.model.reader.CharacterGender
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,7 @@ data class VoiceStatus(
 	val status: DownloadStatus,
 	val engine: String = VoiceEngine.PIPER,
 	val progressPercent: Int = 0,
+	val gender: CharacterGender = CharacterGender.UNKNOWN,
 )
 
 data class VoiceLibrary(
@@ -87,6 +89,7 @@ data class VoiceDefinition(
 	val sizeMb: Int,
 	val engine: String = VoiceEngine.PIPER,
 	val speakerId: Int = 0,
+	val gender: CharacterGender = CharacterGender.UNKNOWN,
 	/**
 	 * Voices that share a model id are downloaded and loaded once.
 	 * Empty means this voice is its own model, which is how the Piper packs are stored.
@@ -279,6 +282,7 @@ class VoicePackManager(
 				sizeMb = voice.sizeMb,
 				status = if (voiceReady(voice.id)) DownloadStatus.Ready else DownloadStatus.Missing,
 				engine = voice.engine,
+				gender = voice.gender,
 			)
 		}
 		val packs = catalog.voices.groupBy { it.modelKey() }.map { (modelId, group) ->

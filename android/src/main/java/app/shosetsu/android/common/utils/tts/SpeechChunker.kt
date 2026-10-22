@@ -28,9 +28,15 @@ object SpeechChunker {
 	private val abbreviations = setOf(
 		"mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "vol", "no", "fig",
 	)
+	private val bracketCitation = Regex(
+		"""(?:\[\s*(?:\d+|\*+)\s*]|［\s*(?:\d+|\*+)\s*］|【\s*(?:\d+|\*+)\s*】|〖\s*(?:\d+|\*+)\s*〗|〔\s*(?:\d+|\*+)\s*〕)"""
+	)
+	private val bracketMarks = Regex("""[\[\]［］【】〖〗〔〕]""")
 
 	fun chunks(text: String): List<String> {
 		val normalized = text
+			.replace(bracketCitation, "")
+			.replace(bracketMarks, "")
 			.replace(Regex("\\s*[—–]\\s*"), ", ")
 			.replace('…', '.')
 			.replace(Regex("\\s+"), " ")

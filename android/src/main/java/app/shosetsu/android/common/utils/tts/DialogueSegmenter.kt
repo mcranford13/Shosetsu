@@ -1,5 +1,6 @@
 package app.shosetsu.android.common.utils.tts
 
+import app.shosetsu.android.view.uimodels.model.reader.CharacterGender
 import app.shosetsu.android.view.uimodels.model.reader.SegmentSource
 import app.shosetsu.android.view.uimodels.model.reader.SpeechSegment
 import kotlin.math.abs
@@ -72,6 +73,7 @@ object DialogueSegmenter {
 		'«' to '»',
 		'‘' to '’',
 		'\'' to '\'',
+		'[' to ']',
 	)
 
 	private val pronouns = setOf(
@@ -88,7 +90,11 @@ object DialogueSegmenter {
 	)
 
 	private data class Mark(val elementId: String, val start: Int, val end: Int)
-	private data class Speaker(val key: String, val name: String)
+	private data class Speaker(
+		val key: String,
+		val name: String,
+		val gender: CharacterGender = CharacterGender.UNKNOWN,
+	)
 
 	/**
 	 * Stable key for a detected name. "Alice" and " alice " share a key.
@@ -97,7 +103,15 @@ object DialogueSegmenter {
 	fun characterKey(displayName: String): String {
 		val normalized = displayName.trim().replace(Regex("\\s+"), " ").lowercase()
 		if (normalized == NARRATOR || normalized == UNKNOWN) return "name:$normalized"
-		return normalized
+		val words = normalized.split(' ').toMutableList()
+		if (words.size >= 2 && words[0] == "young" && words[1].trimEnd('.') == "master") {
+			words.removeAt(0)
+			words.removeAt(0)
+		}
+		while (words.size > 1 && words.first().trimEnd('.') in identityTitles) {
+			words.removeAt(0)
+		}
+		return words.joinToString(" ")
 	}
 
 	fun segment(pieces: List<SegmentSource>): List<SpeechSegment> {
@@ -122,7 +136,14 @@ object DialogueSegmenter {
 				regions += Region(cursor, quote.start, false, NARRATOR, NARRATOR_NAME)
 			}
 			val speaker = attribute(full, quote.start, quote.end, previous, previousQuoteEnd)
-			regions += Region(quote.innerStart, quote.innerEnd, true, speaker.key, speaker.name)
+			regions += Region(
+				quote.innerStart,
+				quote.innerEnd,
+				true,
+				speaker.key,
+				speaker.name,
+				speaker.gender,
+			)
 			previous = speaker
 			previousQuoteEnd = quote.end
 			cursor = quote.end
@@ -131,6 +152,9 @@ object DialogueSegmenter {
 			regions += Region(cursor, full.length, false, NARRATOR, NARRATOR_NAME)
 		}
 
+		val inferredGenders = regions
+			.filter { it.gender != CharacterGender.UNKNOWN }
+			.associate { it.key to it.gender }
 		val segments = ArrayList<SpeechSegment>()
 		for (region in regions) {
 			for (slice in slices(full, marks, region.start, region.end)) {
@@ -141,6 +165,7 @@ object DialogueSegmenter {
 					characterKey = region.key,
 					displayName = region.name,
 					dialogue = region.dialogue,
+					gender = inferredGenders[region.key] ?: region.gender,
 				)
 			}
 		}
@@ -153,6 +178,7 @@ object DialogueSegmenter {
 		val dialogue: Boolean,
 		val key: String,
 		val name: String,
+		val gender: CharacterGender = CharacterGender.UNKNOWN,
 	)
 
 	private data class RawPiece(val elementId: String, val text: String)
@@ -164,7 +190,7 @@ object DialogueSegmenter {
 		while (index < text.length) {
 			if (isOpeningQuote(text, index)) {
 				val close = findClose(text, index + 1, quoteClosers.getValue(text[index]))
-				if (close > index + 1) {
+				if (close > index + 1 && isUsableQuote(text, index, close)) {
 					quotes += Quote(index, close + 1, index + 1, close)
 					index = close + 1
 					continue
@@ -178,6 +204,9 @@ object DialogueSegmenter {
 	private fun isOpeningQuote(text: String, index: Int): Boolean {
 		val mark = text[index]
 		if (mark !in quoteClosers) return false
+		if (mark == '[' && (text.getOrNull(index - 1) == '[' || text.getOrNull(index + 1) == '[')) {
+			return false
+		}
 		if (mark == '\'' || mark == '’') {
 			val previous = text.getOrNull(index - 1)
 			if (previous != null && previous.isLetter()) return false
@@ -185,6 +214,16 @@ object DialogueSegmenter {
 			if (next.isWhitespace()) return false
 		}
 		return true
+	}
+
+	private fun isUsableQuote(text: String, open: Int, close: Int): Boolean {
+		if (text[open] != '[') return true
+		val inner = text.substring(open + 1, close)
+		return inner.length <= MAX_BRACKET_SPEECH &&
+			'\n' !in inner &&
+			'[' !in inner &&
+			']' !in inner &&
+			inner.any { it.isLetter() }
 	}
 
 	private fun findClose(text: String, from: Int, close: Char): Int {
@@ -217,17 +256,34 @@ object DialogueSegmenter {
 		val afterEnd = (quoteEnd + WINDOW).coerceAtMost(full.length)
 		val before = full.substring(beforeStart, quoteStart)
 		val after = full.substring(quoteEnd, afterEnd)
+		val tagWindow = before.takeLast(48) + " " + after.take(48)
+		val pronounGender = if (pronounTag.containsMatchIn(tagWindow)) {
+			genderFromPronoun(tagWindow)
+		} else {
+			CharacterGender.UNKNOWN
+		}
 		val named = namesNearVerb(before, beforeStart, quoteStart) +
 			namesNearVerb(after, quoteEnd, quoteEnd)
-		named.minByOrNull { it.first }?.let { return Speaker(characterKey(it.second), it.second) }
-
-		colonSpeaker.find(before)?.let { match ->
-			usableName(match.groupValues[1])?.let { return Speaker(characterKey(it), it) }
+		named.minByOrNull { it.first }?.let {
+			val titleGender = genderFromTitle(it.second)
+			return Speaker(
+				characterKey(it.second),
+				it.second,
+				if (titleGender == CharacterGender.UNKNOWN) pronounGender else titleGender,
+			)
 		}
 
-		val tagWindow = before.takeLast(48) + " " + after.take(48)
+		colonSpeaker.find(before)?.let { match ->
+			usableName(match.groupValues[1])?.let {
+				return Speaker(characterKey(it), it, genderFromTitle(it))
+			}
+		}
+
 		val earlier = previous
-		if (pronounTag.containsMatchIn(tagWindow) && earlier != null && earlier.isNamed()) return earlier
+		if (pronounTag.containsMatchIn(tagWindow) && earlier != null && earlier.isNamed()) {
+			val gender = genderFromPronoun(tagWindow)
+			return if (gender == CharacterGender.UNKNOWN) earlier else earlier.copy(gender = gender)
+		}
 
 		if (previous != null && previousQuoteEnd >= 0) {
 			val gap = full.substring(previousQuoteEnd, quoteStart).trim()
@@ -281,7 +337,38 @@ object DialogueSegmenter {
 		return words.subList(from, words.size).joinToString(" ")
 	}
 
-	private val titles = setOf("mr", "mrs", "ms", "miss", "dr", "sir", "lord", "lady", "prof", "professor")
+	private val titles = setOf(
+		"mr", "mrs", "ms", "miss", "dr", "sir", "lord", "lady", "prof", "professor",
+		"master", "saint", "elder", "king", "queen", "prince", "princess", "emperor",
+		"empress", "duke", "duchess", "father", "mother", "brother", "sister",
+		"patriarch", "matriarch",
+	)
+	private val identityTitles = titles + setOf("captain", "general", "commander")
+	private val femaleTitles = setOf(
+		"mrs", "ms", "miss", "lady", "queen", "princess", "empress", "duchess",
+		"mother", "sister", "matriarch",
+	)
+	private val maleTitles = setOf(
+		"mr", "sir", "lord", "master", "king", "prince", "emperor", "duke",
+		"father", "brother", "patriarch",
+	)
+	private val femalePronoun = Regex("""\b(?:she|her|hers)\b""", RegexOption.IGNORE_CASE)
+	private val malePronoun = Regex("""\b(?:he|him|his)\b""", RegexOption.IGNORE_CASE)
+
+	private fun genderFromTitle(name: String): CharacterGender {
+		val words = name.lowercase().split(Regex("\\s+")).map { it.trimEnd('.') }
+		return when {
+			words.any { it in femaleTitles } -> CharacterGender.FEMALE
+			words.any { it in maleTitles } -> CharacterGender.MALE
+			else -> CharacterGender.UNKNOWN
+		}
+	}
+
+	private fun genderFromPronoun(tag: String): CharacterGender = when {
+		femalePronoun.containsMatchIn(tag) && !malePronoun.containsMatchIn(tag) -> CharacterGender.FEMALE
+		malePronoun.containsMatchIn(tag) && !femalePronoun.containsMatchIn(tag) -> CharacterGender.MALE
+		else -> CharacterGender.UNKNOWN
+	}
 
 	private fun isPronoun(name: String) = name.trim().trimEnd('.').lowercase() in pronouns
 
@@ -308,4 +395,6 @@ object DialogueSegmenter {
 		}
 		return result
 	}
+
+	private const val MAX_BRACKET_SPEECH = 400
 }
