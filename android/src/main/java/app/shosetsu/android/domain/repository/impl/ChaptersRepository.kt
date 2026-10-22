@@ -17,6 +17,7 @@ import app.shosetsu.android.domain.repository.base.IChaptersRepository
 import app.shosetsu.lib.IExtension
 import app.shosetsu.lib.Novel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.luaj.vm2.LuaError
 import java.io.IOException
@@ -70,15 +71,21 @@ class ChaptersRepository(
 	): ByteArray = onIO {
 		return@onIO try {
 			memorySource.loadChapterFromCache(entity.id!!)!!
+		} catch (e: CancellationException) {
+			throw e
 		} catch (e: Exception) {
 			try {
 				cacheSource.loadChapterPassage(entity.id!!, formatter.chapterType).also { result ->
 					memorySource.saveChapterInCache(entity.id!!, result)
 				}
+			} catch (e: CancellationException) {
+				throw e
 			} catch (e: Exception) {
 				try {
 					fileSource.load(entity, formatter.chapterType)
 						.also { placeIntoCache(entity, formatter.chapterType, it) }
+				} catch (e: CancellationException) {
+					throw e
 				} catch (e: Exception) {
 					remoteSource.loadChapterPassage(
 						formatter,

@@ -128,7 +128,11 @@ fun ExposedSettingsRepoViewModel.readerVoicePacks() {
 
 	TextPreferenceWidget(
 		title = stringResource(R.string.reader_tts_espeak),
-		subtitle = espeakSubtitle(library.espeak, library.espeakSizeMb),
+		subtitle = espeakSubtitle(
+			library.espeak,
+			library.espeakSizeMb,
+			library.espeakProgressPercent,
+		),
 		modifier = Modifier.fillMaxWidth(),
 		iconDescription = null,
 		onPreferenceClick = {
@@ -149,7 +153,7 @@ fun ExposedSettingsRepoViewModel.readerVoicePacks() {
 	library.packs.forEach { pack ->
 		TextPreferenceWidget(
 			title = if (pack.engine == VoiceEngine.KOKORO) pack.name else "${pack.name} (${pack.language})",
-			subtitle = voiceSubtitle(pack.status, pack.description, pack.sizeMb),
+			subtitle = voiceSubtitle(pack.status, pack.description, pack.sizeMb, pack.progressPercent),
 			modifier = Modifier.fillMaxWidth(),
 			iconDescription = null,
 			onPreferenceClick = {
@@ -218,22 +222,27 @@ private fun ExposedSettingsRepoViewModel.readerDefaultVoiceOption(
 }
 
 @Composable
-private fun espeakSubtitle(status: DownloadStatus, sizeMb: Int): String {
+private fun espeakSubtitle(status: DownloadStatus, sizeMb: Int, progressPercent: Int): String {
 	val size = stringResource(R.string.reader_tts_about_size, sizeMb)
-	val state = statusLabel(status)
+	val state = statusLabel(status, progressPercent)
 	return "$size. $state"
 }
 
 @Composable
-private fun voiceSubtitle(status: DownloadStatus, description: String, sizeMb: Int): String {
+private fun voiceSubtitle(
+	status: DownloadStatus,
+	description: String,
+	sizeMb: Int,
+	progressPercent: Int,
+): String {
 	val size = stringResource(R.string.reader_tts_about_size, sizeMb)
-	return "$description. $size. ${statusLabel(status)}"
+	return "$description. $size. ${statusLabel(status, progressPercent)}"
 }
 
 @Composable
-private fun statusLabel(status: DownloadStatus): String = when (status) {
+private fun statusLabel(status: DownloadStatus, progressPercent: Int): String = when (status) {
 	DownloadStatus.Ready -> stringResource(R.string.reader_tts_installed)
-	DownloadStatus.Downloading -> stringResource(R.string.reader_tts_downloading)
+	DownloadStatus.Downloading -> "${stringResource(R.string.reader_tts_downloading)} $progressPercent%"
 	DownloadStatus.Failed -> stringResource(R.string.reader_tts_failed)
 	DownloadStatus.Missing -> stringResource(R.string.reader_tts_missing)
 }

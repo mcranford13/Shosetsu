@@ -42,6 +42,14 @@ class DownloadsRepository(
 		onIO { database.loadFirstDownload() }
 
 	@Throws(SQLiteException::class)
+	override suspend fun loadPendingDownloads(): List<DownloadEntity> =
+		onIO { database.loadPendingDownloads() }
+
+	@Throws(SQLiteException::class)
+	override suspend fun claimDownload(chapterID: Int): Boolean =
+		onIO { database.claimDownload(chapterID) }
+
+	@Throws(SQLiteException::class)
 	override suspend fun loadDownloadCount(): Int =
 		onIO { database.loadDownloadCount() }
 
@@ -86,6 +94,13 @@ class DownloadsRepository(
 	override suspend fun setAllPending() {
 		onIO {
 			database.setAllPending()
+		}
+	}
+
+	@Throws(SQLiteException::class)
+	override suspend fun resetInterruptedDownloads() {
+		onIO {
+			database.resetInterruptedDownloads()
 		}
 	}
 }

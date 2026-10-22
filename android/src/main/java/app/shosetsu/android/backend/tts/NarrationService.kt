@@ -23,6 +23,17 @@ import app.shosetsu.android.common.consts.BundleKeys.BUNDLE_NOVEL_ID
 import app.shosetsu.android.common.consts.Notifications.CHANNEL_NARRATION
 import app.shosetsu.android.common.consts.Notifications.ID_NARRATION
 import app.shosetsu.android.ui.reader.ChapterReader
+import app.shosetsu.android.view.uimodels.model.reader.TTSPlayback
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import org.kodein.di.DI
+import org.kodein.di.DIAware
+import org.kodein.di.android.closestDI
+import org.kodein.di.instance
 import java.util.concurrent.atomic.AtomicBoolean
 
 /*
@@ -47,12 +58,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The reader still owns the speech loop. This service holds a partial wake lock,
  * media audio focus, and a foreground notification so the process is not frozen.
  */
-class NarrationService : Service() {
-	interface Listener {
-		fun pause()
-		fun resume()
-		fun stop()
-	}
+class NarrationService : Service(), DIAware {
+	override val di: DI by closestDI()
+	private val playbackController by instance<NarrationPlaybackController>()
+	private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
 	private lateinit var audioManager: AudioManager
 	private lateinit var session: MediaSession
@@ -72,14 +81,14 @@ class NarrationService : Service() {
 			AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
 				if (playing) {
 					pausedByFocus = true
-					listener?.pause()
+					playbackController.pause()
 				}
 			}
 
 			AudioManager.AUDIOFOCUS_GAIN -> {
 				if (pausedByFocus) {
 					pausedByFocus = false
-					listener?.resume()
+					playbackController.resume()
 				}
 			}
 		}
@@ -97,18 +106,29 @@ class NarrationService : Service() {
 		session = MediaSession(this, "shosetsu-narration").apply {
 			setCallback(object : MediaSession.Callback() {
 				override fun onPlay() {
-					listener?.resume()
+					playbackController.resume()
 				}
 
 				override fun onPause() {
 					pausedByFocus = false
-					listener?.pause()
+					playbackController.pause()
 				}
 
 				override fun onStop() {
-					listener?.stop()
+					playbackController.stop()
 				}
 			})
+		}
+		serviceScope.launch {
+			combine(playbackController.playback, playbackController.speaker) { state, speaker ->
+				state to speaker
+			}.collect { (state, speaker) ->
+				if (!shown.get()) return@collect
+				playing = state == TTSPlayback.Playing
+				text = speaker?.let { getString(R.string.reader_tts_speaking, it) }
+					?: if (state == TTSPlayback.Paused) getString(R.string.reader_tts_paused) else text
+				publish()
+			}
 		}
 	}
 
@@ -118,21 +138,24 @@ class NarrationService : Service() {
 				pausedByFocus = false
 				playing = false
 				publish()
-				listener?.pause()
+				playbackController.pause()
 			}
 
 			ACTION_RESUME -> {
 				playing = true
 				publish()
-				listener?.resume()
+				playbackController.resume()
 			}
 
 			ACTION_STOP -> {
-				listener?.stop()
+				playbackController.stop()
 				shutdown()
 			}
 
-			ACTION_DISMISS -> shutdown()
+			ACTION_DISMISS -> {
+				playbackController.stop()
+				shutdown()
+			}
 
 			else -> {
 				playing = intent?.getBooleanExtra(EXTRA_PLAYING, true) ?: true
@@ -147,12 +170,16 @@ class NarrationService : Service() {
 	}
 
 	override fun onDestroy() {
+		if (playbackController.playback.value == TTSPlayback.Playing) {
+			playbackController.pause()
+		}
 		releaseWakeLock()
 		abandonFocus()
 		if (::session.isInitialized) {
 			session.isActive = false
 			session.release()
 		}
+		serviceScope.cancel()
 		super.onDestroy()
 	}
 
@@ -310,9 +337,6 @@ class NarrationService : Service() {
 		private const val WAKE_TIMEOUT_MS = 12L * 60L * 60L * 1000L
 
 		private val shown = AtomicBoolean(false)
-
-		@Volatile
-		var listener: Listener? = null
 
 		fun show(
 			context: Context,

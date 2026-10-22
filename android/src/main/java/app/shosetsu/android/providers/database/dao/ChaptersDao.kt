@@ -91,46 +91,20 @@ interface ChaptersDao : BaseDao<DBChapterEntity> {
 		withResult: (R) -> Unit = {}
 	) {
 		val dbChapters: List<DBChapterEntity> = getChapters(novelId)
+		val reconciliation = ChapterReconciler.match(dbChapters, newData)
 
-		newData.forEach { newChapter ->
-			// Try to find a matching chapter
-			// This can be done via the chapter order or url
-			val matchingChapter = dbChapters.find { it.url == newChapter.link }
-				?: dbChapters.find { it.order == newChapter.order }
-
-			if (matchingChapter != null) {
+		reconciliation.matches.forEach { match ->
+			if (match.existing != null) {
 				update(
-					chapterEntity = matchingChapter,
-					newData = newChapter
+					chapterEntity = match.existing,
+					newData = match.incoming
 				)
 			} else {
-				withResult(inserter(newChapter))
+				withResult(inserter(match.incoming))
 			}
 		}
 
-		deleteMissing(getChapters(novelId), newData)
-	}
-
-	/**
-	 * Delete [dbChapters] that are not in [newData]
-	 */
-	private suspend inline fun deleteMissing(
-		dbChapters: List<DBChapterEntity>,
-		newData: List<Novel.Chapter>
-	) {
-		// Remove deleted chapters
-		val removedChapters = dbChapters
-			// Filter out any dbChapters that have a url matching a new chapters link
-			// What remains will be chapters that are not present on the site anymore
-			.filterNot { dbChapter ->
-				newData.any { newChapter -> newChapter.link == dbChapter.url }
-			}
-			// Filter out any dbChapters that have been saved or bookmarked
-			// User choice!
-			.filterNot { it.isSaved || it.bookmarked }
-
-		// Delete the given chapters
-		delete(removedChapters)
+		delete(reconciliation.removable)
 	}
 
 	/**

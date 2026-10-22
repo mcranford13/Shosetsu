@@ -38,6 +38,14 @@ interface IDBDownloadsDataSource {
 	@Throws(SQLiteException::class)
 	suspend fun loadFirstDownload(): DownloadEntity?
 
+	/** Loads downloads that are available to be claimed. */
+	@Throws(SQLiteException::class)
+	suspend fun loadPendingDownloads(): List<DownloadEntity>
+
+	/** Atomically moves a queued download to downloading. */
+	@Throws(SQLiteException::class)
+	suspend fun claimDownload(chapterID: Int): Boolean
+
 	/** Inserts a new [DownloadEntity] */
 	@Throws(SQLiteException::class)
 	suspend fun insertDownload(downloadEntity: DownloadEntity): Long
@@ -75,4 +83,8 @@ interface IDBDownloadsDataSource {
 	 */
 	@Throws(SQLiteException::class)
 	suspend fun setAllPending()
+
+	/** Requeues work left in an active state after interruption. */
+	@Throws(SQLiteException::class)
+	suspend fun resetInterruptedDownloads()
 }

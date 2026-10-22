@@ -20,6 +20,7 @@ import app.shosetsu.android.R
 import app.shosetsu.android.backend.workers.CoroutineWorkerManager
 import app.shosetsu.android.backend.workers.NotificationCapable
 import app.shosetsu.android.common.NullContentResolverException
+import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.consts.LogConstants
 import app.shosetsu.android.common.consts.Notifications
 import app.shosetsu.android.common.consts.Notifications.ID_RESTORE
@@ -45,6 +46,7 @@ import app.shosetsu.android.domain.model.local.NovelCategoryEntity
 import app.shosetsu.android.domain.model.local.NovelEntity
 import app.shosetsu.android.domain.model.local.NovelPinEntity
 import app.shosetsu.android.domain.model.local.NovelSettingEntity
+import app.shosetsu.android.domain.model.local.NovelVoiceCastEntity
 import app.shosetsu.android.domain.model.local.backup.BackupExtensionEntity
 import app.shosetsu.android.domain.model.local.backup.BackupNovelEntity
 import app.shosetsu.android.domain.model.local.backup.FleshedBackupEntity
@@ -58,7 +60,9 @@ import app.shosetsu.android.domain.repository.base.IExtensionsRepository
 import app.shosetsu.android.domain.repository.base.INovelCategoryRepository
 import app.shosetsu.android.domain.repository.base.INovelPinsRepository
 import app.shosetsu.android.domain.repository.base.INovelSettingsRepository
+import app.shosetsu.android.domain.repository.base.INovelVoiceCastRepository
 import app.shosetsu.android.domain.repository.base.INovelsRepository
+import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import app.shosetsu.android.domain.usecases.AddCategoryUseCase
 import app.shosetsu.android.domain.usecases.InstallExtensionUseCase
 import app.shosetsu.android.domain.usecases.StartRepositoryUpdateManagerUseCase
@@ -112,6 +116,8 @@ class RestoreBackupWorker(appContext: Context, params: WorkerParameters) : Corou
 	private val novelsRepo by instance<INovelsRepository>()
 	private val novelPinsRepo by instance<INovelPinsRepository>()
 	private val novelsSettingsRepo by instance<INovelSettingsRepository>()
+	private val novelVoiceCastRepo by instance<INovelVoiceCastRepository>()
+	private val settingsRepo by instance<ISettingsRepository>()
 	private val chaptersRepo by instance<IChaptersRepository>()
 	private val chapterHistoryRepo by instance<ChapterHistoryRepository>()
 	private val categoriesRepo by instance<ICategoryRepository>()
@@ -224,6 +230,7 @@ class RestoreBackupWorker(appContext: Context, params: WorkerParameters) : Corou
 
 		unGZip(decodedBytes).use { stream ->
 			val backup = backupJSON.decodeSafeFromStream<FleshedBackupEntity>(stream)
+			restoreAudiobookSettings(backup)
 
 			notify("Adding categories")
 			val currentCategories = categoriesRepo.getCategories()
@@ -278,9 +285,6 @@ class RestoreBackupWorker(appContext: Context, params: WorkerParameters) : Corou
 			}
 		}
 
-
-		System.gc() // Politely ask for a garbage collection
-		delay(5000) // Wait for gc to occur (maybe), also helps with the next notification
 
 		notify(R.string.restore_notification_content_completed)
 		{
@@ -558,7 +562,36 @@ class RestoreBackupWorker(appContext: Context, params: WorkerParameters) : Corou
 			}
 		}
 
+		backupNovelEntity.voiceCast.forEach { cast ->
+			novelVoiceCastRepo.upsert(
+				NovelVoiceCastEntity(
+					novelId = targetNovelID,
+					characterKey = cast.characterKey,
+					displayName = cast.displayName,
+					voicePackId = cast.voicePackId,
+				)
+			)
+		}
+
 		delay(500) // Delay things a bit
+	}
+
+	private suspend fun restoreAudiobookSettings(backup: FleshedBackupEntity) {
+		val settings = backup.audiobookSettings
+		settings.backend?.let { settingsRepo.setString(SettingKey.ReaderTtsBackend, it) }
+		settings.narratorVoice?.let { settingsRepo.setString(SettingKey.ReaderNarratorVoice, it) }
+		settings.unknownVoice?.let { settingsRepo.setString(SettingKey.ReaderUnknownVoice, it) }
+		settings.linePause?.let { settingsRepo.setInt(SettingKey.ReaderTtsLinePause, it) }
+		settings.paragraphPause?.let { settingsRepo.setInt(SettingKey.ReaderTtsParagraphPause, it) }
+		settings.nextChapter?.let { settingsRepo.setBoolean(SettingKey.ReaderNextChapter, it) }
+		settings.nextChapterAlert?.let {
+			settingsRepo.setBoolean(SettingKey.ReaderNextChapterAlert, it)
+		}
+		settings.systemEngine?.let { settingsRepo.setString(SettingKey.ReaderEngine, it) }
+		settings.systemLanguage?.let { settingsRepo.setString(SettingKey.ReaderLanguage, it) }
+		settings.systemVoice?.let { settingsRepo.setString(SettingKey.ReaderVoice, it) }
+		settings.speed?.let { settingsRepo.setFloat(SettingKey.ReaderSpeed, it) }
+		settings.pitch?.let { settingsRepo.setFloat(SettingKey.ReaderPitch, it) }
 	}
 
 	/**

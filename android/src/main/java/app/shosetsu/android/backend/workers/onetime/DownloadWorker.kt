@@ -16,6 +16,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType.CONNECTED
 import androidx.work.NetworkType.UNMETERED
 import androidx.work.OneTimeWorkRequestBuilder
@@ -58,9 +59,14 @@ import app.shosetsu.android.domain.repository.base.IDownloadsRepository
 import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import app.shosetsu.android.domain.usecases.get.GetExtensionUseCase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.android.closestDI
@@ -134,6 +140,7 @@ class DownloadWorker(
 
 	/** Which extensions are currently having network calls */
 	private val activeExtensions = CopyOnWriteArrayList<Int>()
+	private val claimMutex = Mutex()
 
 	/** Retrieves the setting for if the download system is paused or not */
 	private suspend fun isDownloadPaused(): Boolean =
@@ -176,21 +183,8 @@ class DownloadWorker(
 			}
 		}
 
-	@Synchronized
 	private fun activeExt(id: Int): Int {
-		var count = 0
-		for (i in activeExtensions.size - 1 downTo 0) {
-			try {
-				val aEI = activeExtensions[i]
-				if (aEI == id)
-					count++
-			} catch (e: NullPointerException) {
-				// Ignoring this due to async
-			} catch (e: IndexOutOfBoundsException) {
-				// Ignoring this due to async
-			}
-		}
-		return count
+		return activeExtensions.count { it == id }
 	}
 
 
@@ -239,59 +233,23 @@ class DownloadWorker(
 	 * This allows the creation of multiple jobs
 	 * This will respect the amount of threads running currently
 	 */
-	private suspend fun download() {
-		downloadsRepo.loadFirstDownload()?.let { downloadEntity ->
-			val extID = downloadEntity.extensionID
+	private suspend fun claimDownload(): DownloadEntity? = claimMutex.withLock {
+		val perExtensionLimit = getDownloadThreadsPerExtension().coerceAtLeast(1)
+		val candidate = downloadsRepo.loadPendingDownloads()
+			.firstOrNull { activeExt(it.extensionID) < perExtensionLimit }
+			?: return@withLock null
 
-			//	notify("Pending", downloadEntity.chapterID + 100) { setNotOngoing()setSubText("Download")setContentTitle(downloadEntity.chapterName) }
+		if (!downloadsRepo.claimDownload(candidate.chapterID)) {
+			return@withLock null
+		}
 
-			// This will loop until the downloadEntity status is DOWNLOADING
-			while (downloadEntity.status != DownloadStatus.DOWNLOADING) {
-				/*
-				 * Will stop if download is paused.
-				 * This is here in case the user presses
-				 * the pause button while downloads are WAITING.
-				 */
-				if (isDownloadPaused()) {
-					downloadsRepo.update(
-						downloadEntity.copy(
-							status = DownloadStatus.PENDING
-						)
-					)
-					//		notify("Cancelled", downloadEntity.chapterID + 100) { setNotOngoing()setSubText("Download")setContentTitle(downloadEntity.chapterName) }
-					return
-				}
+		activeExtensions.add(candidate.extensionID)
+		candidate.copy(status = DownloadStatus.DOWNLOADING)
+	}
 
-				/*
-				 * The code below prevents an extension from
-				 * being overloaded with too many async connections.
-				 *
-				 * Checks if there is space for the extension to download from;
-				 * If space is free, will start the extension download and break out of the loop
-				 */
-				if (activeExt(extID) <= getDownloadThreadsPerExtension()) {
-					// There is a connection available, starting this task
-					downloadEntity.status = DownloadStatus.DOWNLOADING
-					downloadsRepo.update(downloadEntity)
-					// Break out of the while
-					break
-				} else {
-					/*
-					 * If the status is pending, the downloadEntity will be set to "WAITING".
-					 * This will tell the user that the download is waiting
-					 * for others to not overload the site.
-					 */
-					if (downloadEntity.status == DownloadStatus.PENDING) {
-						downloadEntity.status = DownloadStatus.WAITING
-						downloadsRepo.update(downloadEntity)
-						notify(downloadEntity)
-					}
-					// Continues the loop, letting the check repeat
-				}
-			}
-
-			// Adds the job as working
-			activeExtensions.add(extID)
+	private suspend fun downloadNext(): Boolean {
+		val downloadEntity = claimDownload() ?: return false
+		var finished = false
 
 			logV("Downloading $downloadEntity")
 			notify(downloadEntity)
@@ -301,6 +259,12 @@ class DownloadWorker(
 
 				notify(downloadEntity, isComplete = true)
 				downloadsRepo.deleteEntity(downloadEntity)
+				finished = true
+			} catch (e: CancellationException) {
+				withContext(NonCancellable) {
+					downloadsRepo.update(downloadEntity.copy(status = DownloadStatus.PENDING))
+				}
+				throw e
 			} catch (e: Exception) {//TODO specify
 				downloadsRepo.update(
 					downloadEntity.copy(
@@ -312,11 +276,21 @@ class DownloadWorker(
 			} finally {
 				activeExtensions.remove(downloadEntity.extensionID)
 			}
-		}
+		return finished
 	}
 
 	override suspend fun doWork(): Result {
 		logI("Starting loop")
+		setForeground(
+			ForegroundInfo(
+				defaultNotificationID,
+				baseNotificationBuilder
+					.setContentText("Downloading chapters")
+					.apply { addCancelAction() }
+					.build()
+			)
+		)
+		downloadsRepo.resetInterruptedDownloads()
 		if (isDownloadPaused())
 			logI("Loop Paused")
 		else {
@@ -333,8 +307,7 @@ class DownloadWorker(
 					launch(Dispatchers.IO) {
 						// Will not run if there are no downloads to complete or if the download is paused
 						while (getDownloadCount() >= 1 && !isDownloadPaused()) {
-							// Download the
-							download()
+							if (!downloadNext()) delay(250)
 						}
 					}
 				}
@@ -396,7 +369,7 @@ class DownloadWorker(
 			launchIO {
 				workerManager.enqueueUniqueWork(
 					DOWNLOAD_WORK_ID,
-					ExistingWorkPolicy.REPLACE,
+					ExistingWorkPolicy.KEEP,
 					OneTimeWorkRequestBuilder<DownloadWorker>()
 						.setConstraints(Constraints.Builder().apply {
 							setRequiredNetworkType(

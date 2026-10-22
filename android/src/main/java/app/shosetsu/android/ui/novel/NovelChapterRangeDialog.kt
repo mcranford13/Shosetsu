@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -114,8 +115,13 @@ private fun ReadingStatusOption(
 	selected: Boolean,
 	onClick: () -> Unit,
 ) {
-	Row(verticalAlignment = Alignment.CenterVertically) {
-		RadioButton(selected = selected, onClick = onClick)
+	Row(
+		verticalAlignment = Alignment.CenterVertically,
+		modifier = Modifier
+			.fillMaxWidth()
+			.clickable(onClick = onClick),
+	) {
+		RadioButton(selected = selected, onClick = null)
 		Text(label)
 	}
 }

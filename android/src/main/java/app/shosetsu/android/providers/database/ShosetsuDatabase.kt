@@ -57,9 +57,11 @@ import app.shosetsu.android.providers.database.migrations.Migration6To7
 import app.shosetsu.android.providers.database.migrations.Migration7to8
 import app.shosetsu.android.providers.database.migrations.Migration8to9
 import app.shosetsu.android.providers.database.migrations.Migration9to10
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /*
  * This file is part of shosetsu.
@@ -138,8 +140,9 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 	companion object {
 		@Volatile
 		private lateinit var databaseShosetsu: ShosetsuDatabase
+		private val initializationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+		private val initializationStarted = AtomicBoolean(false)
 
-		@OptIn(DelicateCoroutinesApi::class)
 		@Synchronized
 		fun getRoomDatabase(context: Context): ShosetsuDatabase {
 			if (!Companion::databaseShosetsu.isInitialized)
@@ -161,11 +164,12 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 					Migration11to12,
 				).build()
 
-			GlobalScope.launch {
+			if (initializationStarted.compareAndSet(false, true)) initializationScope.launch {
 				try {
 					databaseShosetsu.repositoryDao.initializeData()
 				} catch (e: SQLiteException) {
 					e.printStackTrace()
+					initializationStarted.set(false)
 				}
 			}
 			return databaseShosetsu

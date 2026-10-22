@@ -99,7 +99,7 @@ const val URL_APP_REPO = "https://github.com/mcranford13/Shosetsu"
  * Releases list for the standard build's in-app updater.
  * Not a single tag, so later GitHub releases are picked up on their own.
  */
-const val URL_APP_RELEASES = "https://api.github.com/repos/mcranford13/Shosetsu/releases"
+const val URL_APP_RELEASES = "https://api.github.com/repos/mcranford13/Shosetsu/releases?per_page=100"
 const val URL_EXTENSIONS_REPO = "https://gitlab.com/shosetsuorg/extensions"
 const val URL_PATREON = "https://www.patreon.com/doomsdayrs"
 const val URL_KOFI = "https://ko-fi.com/doomsdayrs"

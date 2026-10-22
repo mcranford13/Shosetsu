@@ -1,7 +1,9 @@
 {
   "espeakNgData": {
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2",
-    "sizeMb": 8
+    "sizeMb": 8,
+    "sizeBytes": 7252012,
+    "sha256": "4135ccf82e1f40613491c0874d4945ae9e9c7840933d8e25a6f9e003d9ebf533"
   },
   "voices": [
     {
@@ -10,7 +12,9 @@
       "language": "en-US",
       "description": "Clear US English voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2",
-      "sizeMb": 63
+      "sizeMb": 63,
+      "sizeBytes": 67230653,
+      "sha256": "9e3febfacf0abf4270172d2958bcec246032b7e88efc2720840cc80c93de334e"
     },
     {
       "id": "en_us_ryan",
@@ -18,7 +22,9 @@
       "language": "en-US",
       "description": "US English voice, lower pitch",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ryan-medium.tar.bz2",
-      "sizeMb": 63
+      "sizeMb": 63,
+      "sizeBytes": 67213100,
+      "sha256": "c546af78b6395b4e7c4ce1ed899438b64426a362f5d4ec5fecd090ded9ad7505"
     },
     {
       "id": "en_gb_alba",
@@ -26,7 +32,9 @@
       "language": "en-GB",
       "description": "British English voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2",
-      "sizeMb": 63
+      "sizeMb": 63,
+      "sizeBytes": 67212349,
+      "sha256": "fcd45962906933eec4431d3688f7d74aaac8713c87c6717f91fd3b23463aa1a1"
     },
     {
       "id": "en_gb_alan",
@@ -34,7 +42,9 @@
       "language": "en-GB",
       "description": "British English voice, lower pitch",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alan-medium.tar.bz2",
-      "sizeMb": 63
+      "sizeMb": 63,
+      "sizeBytes": 67220121,
+      "sha256": "a48d4017da0f77668b27bed63fe6e04dd64c6397e1fadad4f460efb0ef7c9012"
     },
     {
       "id": "en_gb_cori",
@@ -42,7 +52,9 @@
       "language": "en-GB",
       "description": "British English voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-cori-medium.tar.bz2",
-      "sizeMb": 63
+      "sizeMb": 63,
+      "sizeBytes": 67257412,
+      "sha256": "49c9a5361bbdd95d7ca9687c4de11e5908481f65e7c7c368960df79949fdac2b"
     },
     {
       "id": "kokoro_af",
@@ -51,6 +63,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 0,
       "modelId": "kokoro_en"
@@ -62,6 +76,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 1,
       "modelId": "kokoro_en"
@@ -73,6 +89,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 2,
       "modelId": "kokoro_en"
@@ -84,6 +102,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 3,
       "modelId": "kokoro_en"
@@ -95,6 +115,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 4,
       "modelId": "kokoro_en"
@@ -106,6 +128,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 5,
       "modelId": "kokoro_en"
@@ -117,6 +141,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 6,
       "modelId": "kokoro_en"
@@ -128,6 +154,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 7,
       "modelId": "kokoro_en"
@@ -139,6 +167,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 8,
       "modelId": "kokoro_en"
@@ -150,6 +180,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 9,
       "modelId": "kokoro_en"
@@ -161,6 +193,8 @@
       "description": "High-quality Kokoro voice",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2",
       "sizeMb": 336,
+      "sizeBytes": 319625534,
+      "sha256": "912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
       "engine": "kokoro",
       "speakerId": 10,
       "modelId": "kokoro_en"

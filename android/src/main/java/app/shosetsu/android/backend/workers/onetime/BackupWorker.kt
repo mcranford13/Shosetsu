@@ -29,6 +29,7 @@ import app.shosetsu.android.backend.workers.CoroutineWorkerManager
 import app.shosetsu.android.backend.workers.NotificationCapable
 import app.shosetsu.android.common.FilePermissionException
 import app.shosetsu.android.common.NullContentResolverException
+import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.SettingKey.BackupOnLowBattery
 import app.shosetsu.android.common.SettingKey.BackupOnLowStorage
 import app.shosetsu.android.common.SettingKey.BackupOnlyWhenIdle
@@ -57,11 +58,13 @@ import app.shosetsu.android.domain.model.local.BackupEntity
 import app.shosetsu.android.domain.model.local.InstalledExtensionEntity
 import app.shosetsu.android.domain.model.local.NovelEntity
 import app.shosetsu.android.domain.model.local.backup.BackupCategoryEntity
+import app.shosetsu.android.domain.model.local.backup.BackupAudiobookSettings
 import app.shosetsu.android.domain.model.local.backup.BackupChapterEntity
 import app.shosetsu.android.domain.model.local.backup.BackupExtensionEntity
 import app.shosetsu.android.domain.model.local.backup.BackupNovelEntity
 import app.shosetsu.android.domain.model.local.backup.BackupNovelSettingEntity
 import app.shosetsu.android.domain.model.local.backup.BackupRepositoryEntity
+import app.shosetsu.android.domain.model.local.backup.BackupVoiceCastEntity
 import app.shosetsu.android.domain.model.local.backup.FleshedBackupEntity
 import app.shosetsu.android.domain.repository.base.ChapterHistoryRepository
 import app.shosetsu.android.domain.repository.base.IBackupRepository
@@ -73,6 +76,7 @@ import app.shosetsu.android.domain.repository.base.IExtensionsRepository
 import app.shosetsu.android.domain.repository.base.INovelCategoryRepository
 import app.shosetsu.android.domain.repository.base.INovelPinsRepository
 import app.shosetsu.android.domain.repository.base.INovelSettingsRepository
+import app.shosetsu.android.domain.repository.base.INovelVoiceCastRepository
 import app.shosetsu.android.domain.repository.base.INovelsRepository
 import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import kotlinx.coroutines.delay
@@ -136,6 +140,7 @@ class BackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 	 * TODO add settings backup
 	 */
 	private val novelSettingsRepository by instance<INovelSettingsRepository>()
+	private val novelVoiceCastRepository by instance<INovelVoiceCastRepository>()
 	private val extensionsRepository by instance<IExtensionsRepository>()
 	private val chaptersRepository by instance<IChaptersRepository>()
 	private val chapterHistoryRepository by instance<ChapterHistoryRepository>()
@@ -292,14 +297,10 @@ class BackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 			true
 		}
 
-		System.gc() // please clean up
-
 		if (success) {
 			val result = writeBackup(extensions, novelsToChapters, backupSettings, categories)
 
 			if (result == null) {
-				// Call GC to clean up the bulky resources
-				System.gc()
 				delay(500)
 				backupRepository.updateProgress(BackupProgress.COMPLETE)
 				return Result.success()
@@ -340,6 +341,24 @@ class BackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 			notify("Creating backup entity")
 			val backup = FleshedBackupEntity(
 				repos = repositoriesRequired,
+				audiobookSettings = if (backupSettings) {
+					BackupAudiobookSettings(
+						backend = iSettingsRepository.getString(SettingKey.ReaderTtsBackend),
+						narratorVoice = iSettingsRepository.getString(SettingKey.ReaderNarratorVoice),
+						unknownVoice = iSettingsRepository.getString(SettingKey.ReaderUnknownVoice),
+						linePause = iSettingsRepository.getInt(SettingKey.ReaderTtsLinePause),
+						paragraphPause = iSettingsRepository.getInt(SettingKey.ReaderTtsParagraphPause),
+						nextChapter = iSettingsRepository.getBoolean(SettingKey.ReaderNextChapter),
+						nextChapterAlert = iSettingsRepository.getBoolean(SettingKey.ReaderNextChapterAlert),
+						systemEngine = iSettingsRepository.getString(SettingKey.ReaderEngine),
+						systemLanguage = iSettingsRepository.getString(SettingKey.ReaderLanguage),
+						systemVoice = iSettingsRepository.getString(SettingKey.ReaderVoice),
+						speed = iSettingsRepository.getFloat(SettingKey.ReaderSpeed),
+						pitch = iSettingsRepository.getFloat(SettingKey.ReaderPitch),
+					)
+				} else {
+					BackupAudiobookSettings()
+				},
 				// Creates the trees
 				extensions = extensions.map { extensionEntity ->
 					BackupExtensionEntity(
@@ -386,12 +405,20 @@ class BackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 								status = novel.status,
 								settings = backupNovelSettings,
 								categories = novelCategories,
-								pinned = novelPinRepository.isPinned(novel.id!!)
+								pinned = novelPinRepository.isPinned(novel.id!!),
+								voiceCast = if (backupSettings) {
+									novelVoiceCastRepository.getAll(novel.id!!).map {
+										BackupVoiceCastEntity(
+											it.characterKey,
+											it.displayName,
+											it.voicePackId,
+										)
+									}
+								} else {
+									emptyList()
+								},
 							) to chapters
 						}.map { (backupEntity, chapters) ->
-							// Make sure we have as much memory as possible
-							System.gc()
-
 							// Perform the massive collection / transformation
 							backupEntity.copy(
 								chapters = chapters.toList()
@@ -406,8 +433,6 @@ class BackupWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 			notify("Encoding to json")
 			backupJSON.encodeToStream(backup, gzip)
 		}
-		System.gc() // please clean up
-
 		logI("Saving to file")
 		notify("Saving to file")
 		val backupEntity = BackupEntity(zippedBytes)

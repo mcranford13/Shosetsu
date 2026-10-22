@@ -73,46 +73,50 @@ fun ChapterReaderBottomSheetContent(
 		horizontalArrangement = Arrangement.SpaceBetween,
 		verticalAlignment = Alignment.CenterVertically
 	) {
-		SimpleIconButton(Icons.AutoMirrored.Filled.ArrowBack, null, onClick = exit)
+		SimpleIconButton(
+			Icons.AutoMirrored.Filled.ArrowBack,
+			stringResource(R.string.reader_action_back),
+			onClick = exit,
+		)
 
 		Row {
 			SimpleIconButton(
 				Icons.Outlined.VisibilityOff,
-				null,
+				stringResource(R.string.reader_action_focus),
 				onClick = toggleFocus
 			)
 			SimpleIconButton(
 				if (!isBookmarked) Icons.Outlined.BookmarkBorder
 				else Icons.Outlined.Bookmark,
-				null,
+				stringResource(R.string.reader_action_bookmark),
 				onClick = toggleBookmark
 			)
 
 			SimpleIconButton(
 				if (!isRotationLocked) Icons.Outlined.ScreenRotation
 				else Icons.Outlined.ScreenLockRotation,
-				null,
+				stringResource(R.string.reader_action_rotation),
 				onClick = toggleRotationLock
 			)
 
 			if (ttsPlayback != TTSPlayback.Playing)
 				SimpleIconButton(
 					Icons.Outlined.Audiotrack,
-					null,
+					stringResource(R.string.reader_action_play),
 					onClick = onPlayTTS
 				)
 
 			if (ttsPlayback == TTSPlayback.Playing)
 				SimpleIconButton(
 					Icons.Outlined.PauseCircle,
-					null,
+					stringResource(R.string.reader_action_pause),
 					onClick = onPauseTTS
 				)
 
 			if (ttsPlayback != TTSPlayback.Stopped)
 				SimpleIconButton(
 					Icons.Outlined.StopCircle,
-					null,
+					stringResource(R.string.reader_tts_stop),
 					onClick = onStopTTS
 				)
 
@@ -125,7 +129,7 @@ fun ChapterReaderBottomSheetContent(
 			if (onShowNavigation != null) {
 				SimpleIconButton(
 					Icons.Outlined.UnfoldLess,
-					null,
+					stringResource(R.string.reader_action_navigation),
 					onClick = onShowNavigation
 				)
 			}
@@ -137,7 +141,7 @@ fun ChapterReaderBottomSheetContent(
 			} else {
 				Icons.Outlined.ExpandLess
 			},
-			null,
+			stringResource(R.string.reader_action_sheet),
 			onClick = {
 				coroutineScope.launch {
 					if (scaffoldState.bottomSheetState.currentValue != SheetValue.Expanded) {

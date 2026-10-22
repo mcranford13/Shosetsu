@@ -1,6 +1,7 @@
 package app.shosetsu.android.backend.tts
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,8 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.RandomAccessFile
+import java.security.MessageDigest
 
 /*
  * This file is part of shosetsu.
@@ -49,6 +52,7 @@ data class VoiceStatus(
 	val sizeMb: Int,
 	val status: DownloadStatus,
 	val engine: String = VoiceEngine.PIPER,
+	val progressPercent: Int = 0,
 )
 
 data class VoiceLibrary(
@@ -56,6 +60,7 @@ data class VoiceLibrary(
 	val espeakSizeMb: Int,
 	val voices: List<VoiceStatus>,
 	val packs: List<VoiceStatus> = emptyList(),
+	val espeakProgressPercent: Int = 0,
 )
 
 @Serializable
@@ -65,7 +70,12 @@ data class VoiceCatalog(
 )
 
 @Serializable
-data class ArchiveFile(val url: String, val sizeMb: Int)
+data class ArchiveFile(
+	val url: String,
+	val sizeMb: Int,
+	val sha256: String,
+	val sizeBytes: Long = 0,
+)
 
 @Serializable
 data class VoiceDefinition(
@@ -82,6 +92,8 @@ data class VoiceDefinition(
 	 * Empty means this voice is its own model, which is how the Piper packs are stored.
 	 */
 	val modelId: String = "",
+	val sha256: String,
+	val sizeBytes: Long = 0,
 ) {
 	fun modelKey(): String = modelId.ifBlank { id }
 }
@@ -97,6 +109,7 @@ class VoicePackManager(
 	private val root = File(context.filesDir, "tts")
 	private val espeakDir = File(root, "espeak-ng-data")
 	private val voiceRoot = File(root, "voices")
+	private val downloadRoot = File(root, "downloads")
 	private val json = Json { ignoreUnknownKeys = true }
 	private val mutex = Mutex()
 
@@ -129,21 +142,34 @@ class VoicePackManager(
 				return@withLock
 			}
 			setEspeak(DownloadStatus.Downloading)
+			val archive = catalog.espeakNgData
+			val staging = File(root, ".espeak-ng-data.installing")
 			try {
-				download(catalog.espeakNgData.url) { stream ->
+				staging.deleteRecursively()
+				staging.mkdirs()
+				val downloaded = downloadVerified(archive, File(downloadRoot, "espeak-ng-data.part")) {
+					setEspeak(DownloadStatus.Downloading, it)
+				}
+				downloaded.inputStream().use { stream ->
 					extract(stream) { name ->
 						val marker = "espeak-ng-data/"
 						val index = name.indexOf(marker)
 						if (index < 0 || name.endsWith("/")) return@extract null
 						val relative = name.substring(index + marker.length)
 						if (relative.isBlank()) return@extract null
-						safeChild(espeakDir, relative)
+						safeChild(staging, relative)
 					}
 				}
-				if (!espeakReady()) error("Phoneme data archive did not contain espeak-ng-data")
+				if (!espeakDirReady(staging)) error("Phoneme data archive did not contain espeak-ng-data")
+				replaceDirectory(staging, espeakDir)
+				downloaded.delete()
 				setEspeak(DownloadStatus.Ready)
+			} catch (e: CancellationException) {
+				staging.deleteRecursively()
+				setEspeak(DownloadStatus.Missing)
+				throw e
 			} catch (e: Exception) {
-				espeakDir.deleteRecursively()
+				staging.deleteRecursively()
 				setEspeak(DownloadStatus.Failed)
 				throw e
 			}
@@ -161,9 +187,20 @@ class VoicePackManager(
 			}
 			setModel(modelId, DownloadStatus.Downloading)
 			val dir = modelDir(modelId)
+			val staging = File(voiceRoot, ".$modelId.installing")
 			try {
-				dir.mkdirs()
-				download(definition.url) { stream ->
+				staging.deleteRecursively()
+				staging.mkdirs()
+				val archive = ArchiveFile(
+					definition.url,
+					definition.sizeMb,
+					definition.sha256,
+					definition.sizeBytes,
+				)
+				val downloaded = downloadVerified(archive, File(downloadRoot, "$modelId.part")) {
+					setModel(modelId, DownloadStatus.Downloading, it)
+				}
+				downloaded.inputStream().use { stream ->
 					var onnxSaved = false
 					var tokensSaved = false
 					var voicesSaved = false
@@ -172,24 +209,30 @@ class VoicePackManager(
 						when {
 							!onnxSaved && base.endsWith(".onnx") && !name.contains("espeak-ng-data") -> {
 								onnxSaved = true
-								File(dir, "model.onnx")
+								File(staging, "model.onnx")
 							}
 							!tokensSaved && base == "tokens.txt" && !name.contains("espeak-ng-data") -> {
 								tokensSaved = true
-								File(dir, "tokens.txt")
+								File(staging, "tokens.txt")
 							}
 							!voicesSaved && base == "voices.bin" -> {
 								voicesSaved = true
-								File(dir, "voices.bin")
+								File(staging, "voices.bin")
 							}
 							else -> null
 						}
 					}
 				}
-				if (!modelReady(modelId)) error("Voice archive for $modelId did not contain a model")
+				if (!modelReady(modelId, staging)) error("Voice archive for $modelId did not contain a model")
+				replaceDirectory(staging, dir)
+				downloaded.delete()
 				setModel(modelId, DownloadStatus.Ready)
+			} catch (e: CancellationException) {
+				staging.deleteRecursively()
+				setModel(modelId, DownloadStatus.Missing)
+				throw e
 			} catch (e: Exception) {
-				dir.deleteRecursively()
+				staging.deleteRecursively()
 				setModel(modelId, DownloadStatus.Failed)
 				throw e
 			}
@@ -214,9 +257,8 @@ class VoicePackManager(
 
 	private fun voiceReady(id: String): Boolean = modelReady(definition(id).modelKey())
 
-	private fun modelReady(modelId: String): Boolean {
+	private fun modelReady(modelId: String, dir: File = modelDir(modelId)): Boolean {
 		val engine = catalog.voices.first { it.modelKey() == modelId }.engine
-		val dir = modelDir(modelId)
 		val model = File(dir, "model.onnx")
 		val tokens = File(dir, "tokens.txt")
 		if (!model.isFile || model.length() == 0L || !tokens.isFile || tokens.length() == 0L) return false
@@ -268,29 +310,100 @@ class VoicePackManager(
 		_library.value = scan()
 	}
 
-	private fun setEspeak(status: DownloadStatus) {
-		_library.value = _library.value.copy(espeak = status)
+	private fun setEspeak(status: DownloadStatus, progressPercent: Int = 0) {
+		_library.value = _library.value.copy(
+			espeak = status,
+			espeakProgressPercent = progressPercent,
+		)
 	}
 
-	private fun setModel(modelId: String, status: DownloadStatus) {
+	private fun setModel(modelId: String, status: DownloadStatus, progressPercent: Int = 0) {
 		val voiceIds = catalog.voices.filter { it.modelKey() == modelId }.map { it.id }.toSet()
 		_library.value = _library.value.copy(
 			voices = _library.value.voices.map { voice ->
-				if (voice.id in voiceIds) voice.copy(status = status) else voice
+				if (voice.id in voiceIds) voice.copy(
+					status = status,
+					progressPercent = progressPercent,
+				) else voice
 			},
 			packs = _library.value.packs.map { pack ->
-				if (pack.id == modelId) pack.copy(status = status) else pack
+				if (pack.id == modelId) pack.copy(
+					status = status,
+					progressPercent = progressPercent,
+				) else pack
 			},
 		)
 	}
 
-	private fun download(url: String, consume: (InputStream) -> Unit) {
-		val request = Request.Builder().url(url).build()
-		client.newCall(request).execute().use { response ->
-			if (!response.isSuccessful) error("Download failed (${response.code}) for $url")
-			val body = response.body ?: error("Empty download for $url")
-			body.byteStream().use(consume)
+	private fun downloadVerified(
+		archive: ArchiveFile,
+		part: File,
+		onProgress: (Int) -> Unit,
+	): File {
+		root.mkdirs()
+		part.parentFile?.mkdirs()
+		if (archive.sizeBytes > 0 && part.length() > archive.sizeBytes) part.delete()
+		if (archive.sizeBytes > 0 && part.length() == archive.sizeBytes) {
+			if (part.sha256().equals(archive.sha256, ignoreCase = true)) {
+				onProgress(100)
+				return part
+			}
+			part.delete()
 		}
+		val existing = part.takeIf { it.isFile }?.length() ?: 0L
+		val remaining = (archive.sizeBytes - existing).coerceAtLeast(0L)
+		if (archive.sizeBytes > 0 && root.usableSpace < remaining + MIN_FREE_SPACE_BYTES) {
+			error("Not enough free space for voice pack")
+		}
+		val request = Request.Builder()
+			.url(archive.url)
+			.apply { if (existing > 0) header("Range", "bytes=$existing-") }
+			.build()
+		client.newCall(request).execute().use { response ->
+			if (!response.isSuccessful) error("Download failed (${response.code}) for ${archive.url}")
+			val body = response.body ?: error("Empty download for ${archive.url}")
+			val append = existing > 0 && response.code == 206
+			RandomAccessFile(part, "rw").use { output ->
+				if (append) output.seek(existing) else output.setLength(0)
+				var downloaded = if (append) existing else 0L
+				body.byteStream().use { input ->
+					val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+					while (true) {
+						val count = input.read(buffer)
+						if (count < 0) break
+						output.write(buffer, 0, count)
+						downloaded += count
+						val total = archive.sizeBytes.takeIf { it > 0 }
+							?: (body.contentLength() + if (append) existing else 0L)
+						if (total > 0) {
+							onProgress(((downloaded * 100L) / total).coerceIn(0, 100).toInt())
+						}
+					}
+				}
+			}
+		}
+		if (archive.sizeBytes > 0 && part.length() != archive.sizeBytes) {
+			error("Voice pack download was incomplete")
+		}
+		if (!part.sha256().equals(archive.sha256, ignoreCase = true)) {
+			part.delete()
+			error("Voice pack checksum did not match")
+		}
+		onProgress(100)
+		return part
+	}
+
+	private fun replaceDirectory(staging: File, target: File) {
+		val backup = File(target.parentFile, ".${target.name}.old")
+		backup.deleteRecursively()
+		if (target.exists() && !target.renameTo(backup)) {
+			error("Could not prepare existing voice pack for replacement")
+		}
+		if (!staging.renameTo(target)) {
+			if (backup.exists()) backup.renameTo(target)
+			error("Could not install voice pack atomically")
+		}
+		backup.deleteRecursively()
 	}
 
 	private fun extract(stream: InputStream, destination: (String) -> File?) {
@@ -312,12 +425,29 @@ class VoicePackManager(
 
 	private fun safeChild(parent: File, relative: String): File? {
 		val child = File(parent, relative)
-		val parentPath = parent.canonicalFile.toPath()
-		val childPath = child.canonicalFile.toPath()
-		if (!childPath.startsWith(parentPath)) return null
+		val parentPath = parent.canonicalFile.path
+		val childPath = child.canonicalFile.path
+		if (childPath != parentPath && !childPath.startsWith(parentPath + File.separator)) return null
 		return child
 	}
 
 	private fun espeakDirReady(dir: File): Boolean =
 		File(dir, "phontab").isFile || File(dir, "phondata").isFile
+
+	private fun File.sha256(): String {
+		val digest = MessageDigest.getInstance("SHA-256")
+		inputStream().buffered().use { input ->
+			val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+			while (true) {
+				val count = input.read(buffer)
+				if (count < 0) break
+				digest.update(buffer, 0, count)
+			}
+		}
+		return digest.digest().joinToString("") { "%02x".format(it) }
+	}
+
+	companion object {
+		private const val MIN_FREE_SPACE_BYTES = 32L * 1024L * 1024L
+	}
 }

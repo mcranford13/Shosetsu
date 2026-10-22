@@ -285,6 +285,7 @@ val viewModelsModule: DI.Module = DI.Module("view_models_module") {
 			instance(),
 			voiceCast = instance(),
 			audiobook = instance(),
+			narration = instance(),
 		)
 	}
 	bind<ARepositoryViewModel>() with provider {

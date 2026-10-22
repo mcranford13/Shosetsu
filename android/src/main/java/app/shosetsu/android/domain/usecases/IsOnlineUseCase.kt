@@ -12,7 +12,6 @@ import android.net.NetworkCapabilities.TRANSPORT_WIFI
 import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.getSystemService
-import androidx.work.impl.utils.registerDefaultNetworkCallbackCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -106,7 +105,7 @@ class IsOnlineUseCase(
 		}
 
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			connectivityManager.registerDefaultNetworkCallbackCompat(callback)
+			connectivityManager.registerDefaultNetworkCallback(callback)
 		} else {
 			// For Android 5
 			connectivityManager.registerNetworkCallback(
