@@ -28,23 +28,23 @@ class AudiobookEngine(
 	private val system: SystemTtsSpeaker,
 	private val neural: SherpaTtsSpeaker,
 	val packs: VoicePackManager,
-) : AudiobookSpeaker {
+) : AudiobookSpeaker, NarrationEngine {
 	@Volatile
-	var systemEngine: String = ""
+	override var systemEngine: String = ""
 		set(value) {
 			field = value
 			system.configuredEngine = value
 		}
 
 	@Volatile
-	var systemLanguage: String = ""
+	override var systemLanguage: String = ""
 		set(value) {
 			field = value
 			system.configuredLanguage = value
 		}
 
 	@Volatile
-	var systemVoice: String = ""
+	override var systemVoice: String = ""
 		set(value) {
 			field = value
 			system.configuredVoice = value
@@ -52,7 +52,7 @@ class AudiobookEngine(
 
 	override suspend fun play(request: SpeechRequest): SpeechResult = play(request, SettingKey.TTS_SYSTEM)
 
-	suspend fun play(request: SpeechRequest, backend: String): SpeechResult {
+	override suspend fun play(request: SpeechRequest, backend: String): SpeechResult {
 		val neuralReady = backend == SettingKey.TTS_NEURAL &&
 			request.packId.isNotEmpty() &&
 			packs.espeakReady() &&
@@ -77,7 +77,7 @@ class AudiobookEngine(
 
 	override fun prefetch(request: SpeechRequest) = prefetch(request, SettingKey.TTS_SYSTEM)
 
-	fun prefetch(request: SpeechRequest, backend: String) {
+	override fun prefetch(request: SpeechRequest, backend: String) {
 		if (backend == SettingKey.TTS_NEURAL) neural.prefetch(request)
 	}
 

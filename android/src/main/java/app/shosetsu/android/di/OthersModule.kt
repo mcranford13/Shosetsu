@@ -1,7 +1,10 @@
 package app.shosetsu.android.di
 
 import app.shosetsu.android.backend.tts.AudiobookEngine
+import android.content.Context
 import app.shosetsu.android.backend.tts.NarrationPlaybackController
+import app.shosetsu.android.backend.tts.NarrationResumeStore
+import java.io.File
 import app.shosetsu.android.backend.tts.SherpaTtsSpeaker
 import app.shosetsu.android.backend.tts.SystemTtsSpeaker
 import app.shosetsu.android.backend.tts.VoicePackManager
@@ -71,5 +74,8 @@ internal val othersModule = DI.Module("others") {
 	bind<SystemTtsSpeaker>() with singleton { SystemTtsSpeaker(instance()) }
 	bind<SherpaTtsSpeaker>() with singleton { SherpaTtsSpeaker(instance()) }
 	bind<AudiobookEngine>() with singleton { AudiobookEngine(instance(), instance(), instance()) }
-	bind<NarrationPlaybackController>() with singleton { NarrationPlaybackController(instance()) }
+	bind<NarrationResumeStore>() with singleton {
+		NarrationResumeStore(File(instance<Context>().filesDir, "tts/narration-resume.json"))
+	}
+	bind<NarrationPlaybackController>() with singleton { NarrationPlaybackController(instance(), instance()) }
 }
