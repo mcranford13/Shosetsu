@@ -1,7 +1,12 @@
 package app.shosetsu.android.viewmodel.impl
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.database.sqlite.SQLiteException
+import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
@@ -993,6 +998,17 @@ class ChapterReaderViewModel(
 	private var ttsChunkCursor = 0
 
 	override val currentSpeaker = narration.speaker
+	private var narrationSession: NarrationService.Session? = null
+	private var narrationBound = false
+	private val narrationConnection = object : ServiceConnection {
+		override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+			narrationSession = service as? NarrationService.Session
+		}
+
+		override fun onServiceDisconnected(name: ComponentName?) {
+			narrationSession = null
+		}
+	}
 	override val castMembers = MutableStateFlow<List<ReaderVoiceCast>>(emptyList())
 	override val showCast = MutableStateFlow(false)
 	override val installedVoices: StateFlow<List<ReaderVoiceOption>> by lazy {
@@ -1017,6 +1033,11 @@ class ChapterReaderViewModel(
 	private val alertNextChapter = settingsRepo.getBooleanFlow(SettingKey.ReaderNextChapterAlert)
 
 	init {
+		narrationBound = application.bindService(
+			Intent(application, NarrationService::class.java),
+			narrationConnection,
+			Context.BIND_AUTO_CREATE,
+		)
 		viewModelScopeIO.launch {
 			narration.fallback.collect {
 				exceptions.emit(ExceptionSnackbarModel(application.getString(R.string.reader_tts_fallback)))
@@ -1063,11 +1084,16 @@ class ChapterReaderViewModel(
 		viewModelScopeIO.launch {
 			currentChapterID.collectLatest { chapterId ->
 				logV("chapterId='$chapterId'")
-				if (chapterId >= 0 && narration.chapterId != chapterId) {
+				if (narrationBound) {
+					withTimeoutOrNull(2.seconds) {
+						while (narrationSession == null) delay(20)
+					}
+				}
+				if (chapterId >= 0 && narration.chapterId >= 0 && narration.chapterId != chapterId) {
 					ttsSegmentCursor = 0
 					ttsChunkCursor = 0
 					ttsSeekElement = null
-					narration.stop()
+					stopNarration()
 				}
 				coroutineScope {
 					val item = liveData.first { it != null }
@@ -1160,11 +1186,11 @@ class ChapterReaderViewModel(
 		passage: ChapterPassage.Success,
 	) {
 		if (playback == TTSPlayback.Paused) {
-			narration.pause()
+			pauseNarration()
 			return
 		}
 		if (playback == TTSPlayback.Stopped) {
-			narration.stop()
+			stopNarration()
 			return
 		}
 		val segments = passage.segments
@@ -1176,7 +1202,7 @@ class ChapterReaderViewModel(
 		val seek = ttsSeekElement
 		ttsSeekElement = null
 		if (seek == null && narration.chapterId == currentChapterID.value) {
-			narration.resume()
+			resumeNarration()
 			return
 		}
 		val startIndex = if (seek != null) {
@@ -1224,15 +1250,38 @@ class ChapterReaderViewModel(
 			onStopTts()
 			return
 		}
-		narration.submit(
+		val title = liveData.value
+			?.filterIsInstance<ReaderChapterUI>()
+			?.find { it.id == currentChapterID.value }
+			?.title
+			.orEmpty()
+		submitNarration(
 			NarrationPlan(
 				chapterId = currentChapterID.value,
+				novelId = novelIDLive.value,
+				title = title,
 				items = items,
 				systemEngine = ttsEngine.value,
 				systemLanguage = ttsLanguage.value,
 				systemVoice = ttsVoice.value,
 			)
 		)
+	}
+
+	private fun submitNarration(plan: NarrationPlan) {
+		narrationSession?.submit(plan) ?: narration.submit(plan)
+	}
+
+	private fun resumeNarration() {
+		narrationSession?.resume() ?: narration.resume()
+	}
+
+	private fun pauseNarration() {
+		narrationSession?.pause() ?: narration.pause()
+	}
+
+	private fun stopNarration() {
+		narrationSession?.stop() ?: narration.stop()
 	}
 
 	private suspend fun packFor(voices: MutableMap<String, String>, segment: SpeechSegment): String =
@@ -1302,18 +1351,18 @@ class ChapterReaderViewModel(
 
 	override fun onPlayTts() {
 		if (narration.chapterId == currentChapterID.value) {
-			narration.resume()
+			resumeNarration()
 		} else {
 			ttsPlayback.value = TTSPlayback.Playing
 		}
 	}
 
 	override fun onPauseTts() {
-		narration.pause()
+		pauseNarration()
 	}
 
 	override fun onStopTts() {
-		narration.stop()
+		stopNarration()
 		ttsSegmentCursor = 0
 		ttsChunkCursor = 0
 		ttsSeekElement = null
@@ -1323,8 +1372,10 @@ class ChapterReaderViewModel(
 	override val paddingValues: MutableStateFlow<PaddingValues> = MutableStateFlow(PaddingValues(0.dp))
 
 	override fun onCleared() {
-		// Playback is owned by the foreground service/controller and intentionally
-		// survives the reader screen.
+		if (narrationBound) {
+			application.unbindService(narrationConnection)
+			narrationBound = false
+		}
 	}
 
 	private data class NarrationNotice(

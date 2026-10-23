@@ -11,6 +11,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.kodein.di.DI
@@ -54,17 +56,58 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 
 /**
- * Keeps audiobook playback alive after the screen turns off.
- * The reader still owns the speech loop. This service holds a partial wake lock,
- * media audio focus, and a foreground notification so the process is not frozen.
+ * Owns audiobook playback after the reader closes.
+ * The speech queue, cursor, and engine live in [NarrationPlaybackController]. This
+ * service restores the last snapshot, exposes that state to the reader, and holds
+ * the wake lock, audio focus, and media notification.
  */
 class NarrationService : Service(), DIAware {
 	override val di: DI by closestDI()
 	private val playbackController by instance<NarrationPlaybackController>()
+	private val resumeStore by instance<NarrationResumeStore>()
 	private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+	private val session by lazy { Session() }
+
+	/**
+	 * In-process connection for the reader. The StateFlows are the service's playback state.
+	 */
+	inner class Session : Binder() {
+		val playback: StateFlow<TTSPlayback> = playbackController.playback
+		val progress: StateFlow<String?> = playbackController.progress
+		val speaker: StateFlow<String?> = playbackController.speaker
+		val done: StateFlow<String?> = playbackController.done
+
+		fun submit(plan: NarrationPlan) {
+			playbackController.submit(plan)
+			title = plan.title
+			novelId = plan.novelId
+			chapterId = plan.chapterId
+			playing = true
+			text = plan.items.firstOrNull()?.speaker?.let { getString(R.string.reader_tts_speaking, it) }.orEmpty()
+			publish()
+		}
+
+		fun resume() {
+			playbackController.resume()
+			playing = true
+			publish()
+		}
+
+		fun pause() {
+			pausedByFocus = false
+			playbackController.pause()
+			playing = false
+			publish()
+		}
+
+		fun stop() {
+			playbackController.stop()
+			shutdown()
+		}
+	}
 
 	private lateinit var audioManager: AudioManager
-	private lateinit var session: MediaSession
+	private lateinit var mediaSession: MediaSession
 	private var wakeLock: PowerManager.WakeLock? = null
 	private var focusRequest: AudioFocusRequest? = null
 	private var focusHeld = false
@@ -94,7 +137,7 @@ class NarrationService : Service(), DIAware {
 		}
 	}
 
-	override fun onBind(intent: Intent?): IBinder? = null
+	override fun onBind(intent: Intent?): IBinder = session
 
 	override fun onCreate() {
 		super.onCreate()
@@ -103,7 +146,7 @@ class NarrationService : Service(), DIAware {
 		wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "shosetsu:narration").apply {
 			setReferenceCounted(false)
 		}
-		session = MediaSession(this, "shosetsu-narration").apply {
+		mediaSession = MediaSession(this, "shosetsu-narration").apply {
 			setCallback(object : MediaSession.Callback() {
 				override fun onPlay() {
 					playbackController.resume()
@@ -119,6 +162,14 @@ class NarrationService : Service(), DIAware {
 				}
 			})
 		}
+		if (playbackController.chapterId < 0) {
+			resumeStore.read()?.let { snapshot ->
+				playbackController.restore(snapshot, startPlayback = false)
+				title = snapshot.title
+				novelId = snapshot.novelId
+				chapterId = snapshot.chapterId
+			}
+		}
 		serviceScope.launch {
 			combine(playbackController.playback, playbackController.speaker) { state, speaker ->
 				state to speaker
@@ -133,7 +184,11 @@ class NarrationService : Service(), DIAware {
 	}
 
 	override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-		when (intent?.action) {
+		if (intent == null) {
+			restoreForeground()
+			return START_STICKY
+		}
+		when (intent.action) {
 			ACTION_PAUSE -> {
 				pausedByFocus = false
 				playing = false
@@ -150,34 +205,35 @@ class NarrationService : Service(), DIAware {
 			ACTION_STOP -> {
 				playbackController.stop()
 				shutdown()
+				return START_NOT_STICKY
 			}
 
 			ACTION_DISMISS -> {
 				playbackController.stop()
 				shutdown()
+				return START_NOT_STICKY
 			}
 
 			else -> {
-				playing = intent?.getBooleanExtra(EXTRA_PLAYING, true) ?: true
-				title = intent?.getStringExtra(EXTRA_TITLE).orEmpty()
-				text = intent?.getStringExtra(EXTRA_TEXT).orEmpty()
-				novelId = intent?.getIntExtra(EXTRA_NOVEL, -1) ?: -1
-				chapterId = intent?.getIntExtra(EXTRA_CHAPTER, -1) ?: -1
+				playing = intent.getBooleanExtra(EXTRA_PLAYING, playbackController.playback.value == TTSPlayback.Playing)
+				title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { playbackController.title }
+				text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
+				novelId = intent.getIntExtra(EXTRA_NOVEL, playbackController.novelId)
+				chapterId = intent.getIntExtra(EXTRA_CHAPTER, playbackController.chapterId)
+				if (playing) playbackController.ensurePlaying()
 				publish()
 			}
 		}
-		return START_NOT_STICKY
+		return START_STICKY
 	}
 
 	override fun onDestroy() {
-		if (playbackController.playback.value == TTSPlayback.Playing) {
-			playbackController.pause()
-		}
+		playbackController.interrupt()
 		releaseWakeLock()
 		abandonFocus()
-		if (::session.isInitialized) {
-			session.isActive = false
-			session.release()
+		if (::mediaSession.isInitialized) {
+			mediaSession.isActive = false
+			mediaSession.release()
 		}
 		serviceScope.cancel()
 		super.onDestroy()
@@ -208,7 +264,7 @@ class NarrationService : Service(), DIAware {
 			if (!pausedByFocus) abandonFocus()
 		}
 		val state = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
-		session.setPlaybackState(
+		mediaSession.setPlaybackState(
 			PlaybackState.Builder()
 				.setActions(
 					PlaybackState.ACTION_PLAY or
@@ -218,7 +274,7 @@ class NarrationService : Service(), DIAware {
 				.setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, if (playing) 1f else 0f)
 				.build()
 		)
-		session.isActive = true
+		mediaSession.isActive = true
 	}
 
 	private fun notification(): Notification {
@@ -314,10 +370,30 @@ class NarrationService : Service(), DIAware {
 		focusHeld = false
 	}
 
+	private fun restoreForeground() {
+		if (playbackController.chapterId < 0) {
+			val snapshot = resumeStore.read() ?: return
+			playbackController.restore(snapshot, startPlayback = snapshot.playing)
+			title = snapshot.title
+			novelId = snapshot.novelId
+			chapterId = snapshot.chapterId
+		} else if (playbackController.playback.value == TTSPlayback.Playing) {
+			playbackController.ensurePlaying()
+		}
+		shown.set(true)
+		playing = playbackController.playback.value == TTSPlayback.Playing
+		title = title.ifBlank { playbackController.title }
+		novelId = if (novelId >= 0) novelId else playbackController.novelId
+		chapterId = if (chapterId >= 0) chapterId else playbackController.chapterId
+		val speaker = playbackController.speaker.value
+		if (speaker != null) text = getString(R.string.reader_tts_speaking, speaker)
+		publish()
+	}
+
 	private fun shutdown() {
 		releaseWakeLock()
 		abandonFocus()
-		if (::session.isInitialized) session.isActive = false
+		if (::mediaSession.isInitialized) mediaSession.isActive = false
 		ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
 		stopSelf()
 		shown.set(false)
