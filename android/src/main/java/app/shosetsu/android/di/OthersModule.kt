@@ -2,6 +2,7 @@ package app.shosetsu.android.di
 
 import app.shosetsu.android.backend.tts.AudiobookEngine
 import android.content.Context
+import app.shosetsu.android.backend.tts.NarrationChapterPlayer
 import app.shosetsu.android.backend.tts.NarrationPlaybackController
 import app.shosetsu.android.backend.tts.NarrationResumeStore
 import java.io.File
@@ -78,4 +79,17 @@ internal val othersModule = DI.Module("others") {
 		NarrationResumeStore(File(instance<Context>().filesDir, "tts/narration-resume.json"))
 	}
 	bind<NarrationPlaybackController>() with singleton { NarrationPlaybackController(instance(), instance()) }
+	bind<NarrationChapterPlayer>() with singleton {
+		NarrationChapterPlayer(
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+		)
+	}
 }
