@@ -89,6 +89,13 @@
 	<string name="reader_tts_speaking">Speaking: %1$s</string>
 	<string name="reader_tts_paused">Paused</string>
 	<string name="reader_tts_stop">Stop</string>
+	<string name="reader_tts_previous">Previous sentence</string>
+	<string name="reader_tts_next">Next sentence</string>
+	<string name="reader_tts_previous_chapter">Previous chapter</string>
+	<string name="reader_tts_next_chapter_action">Next chapter</string>
+	<string name="reader_tts_speed">Speed %1$s</string>
+	<string name="reader_tts_sleep">Sleep timer</string>
+	<string name="reader_tts_sleep_minutes">Sleep %1$d min</string>
 	<string name="reader_action_back">Back</string>
 	<string name="reader_action_focus">Toggle focus mode</string>
 	<string name="reader_action_bookmark">Toggle chapter bookmark</string>

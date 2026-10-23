@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical">
+
+	<TextView
+		android:id="@+id/narration_title"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:ellipsize="end"
+		android:maxLines="1"
+		android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+	<TextView
+		android:id="@+id/narration_status"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:ellipsize="end"
+		android:maxLines="1"
+		android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" />
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center_vertical"
+		android:orientation="horizontal">
+
+		<ImageButton
+			android:id="@+id/narration_previous"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_tts_previous"
+			android:src="@android:drawable/ic_media_previous" />
+
+		<ImageButton
+			android:id="@+id/narration_toggle"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_action_play"
+			android:src="@android:drawable/ic_media_play" />
+
+		<ImageButton
+			android:id="@+id/narration_next"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_tts_next"
+			android:src="@android:drawable/ic_media_next" />
+
+		<ImageButton
+			android:id="@+id/narration_stop"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_tts_stop"
+			android:src="@android:drawable/ic_menu_close_clear_cancel" />
+	</LinearLayout>
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center_vertical"
+		android:orientation="horizontal">
+
+		<ImageButton
+			android:id="@+id/narration_chapter_previous"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_tts_previous_chapter"
+			android:src="@android:drawable/ic_media_rew" />
+
+		<ImageButton
+			android:id="@+id/narration_chapter_next"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1"
+			android:background="@android:color/transparent"
+			android:contentDescription="@string/reader_tts_next_chapter_action"
+			android:src="@android:drawable/ic_media_ff" />
+
+		<TextView
+			android:id="@+id/narration_speed"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1.4"
+			android:gravity="center"
+			android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
+
+		<TextView
+			android:id="@+id/narration_sleep"
+			android:layout_width="0dp"
+			android:layout_height="40dp"
+			android:layout_weight="1.4"
+			android:gravity="center"
+			android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
+	</LinearLayout>
+</LinearLayout>

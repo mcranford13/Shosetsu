@@ -9,12 +9,15 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Binder
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -29,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -64,6 +68,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class NarrationService : Service(), DIAware {
 	override val di: DI by closestDI()
 	private val playbackController by instance<NarrationPlaybackController>()
+	private val chapterPlayer by instance<NarrationChapterPlayer>()
 	private val resumeStore by instance<NarrationResumeStore>()
 	private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 	private val session by lazy { Session() }
@@ -147,6 +152,11 @@ class NarrationService : Service(), DIAware {
 			setReferenceCounted(false)
 		}
 		mediaSession = MediaSession(this, "shosetsu-narration").apply {
+			@Suppress("DEPRECATION")
+			setFlags(
+				MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+					MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS,
+			)
 			setCallback(object : MediaSession.Callback() {
 				override fun onPlay() {
 					playbackController.resume()
@@ -160,6 +170,31 @@ class NarrationService : Service(), DIAware {
 				override fun onStop() {
 					playbackController.stop()
 				}
+
+				override fun onSkipToNext() {
+					playbackController.skipForward()
+				}
+
+				override fun onSkipToPrevious() {
+					playbackController.skipBackward()
+				}
+
+				override fun onFastForward() {
+					playbackController.skipForward()
+				}
+
+				override fun onRewind() {
+					playbackController.skipBackward()
+				}
+
+				override fun onCustomAction(action: String, extras: Bundle?) {
+					when (action) {
+						ACTION_CHAPTER_NEXT -> shiftChapter(1)
+						ACTION_CHAPTER_PREVIOUS -> shiftChapter(-1)
+						ACTION_SPEED -> playbackController.cycleSpeed()
+						ACTION_SLEEP -> playbackController.cycleSleep()
+					}
+				}
 			})
 		}
 		if (playbackController.chapterId < 0) {
@@ -171,14 +206,35 @@ class NarrationService : Service(), DIAware {
 			}
 		}
 		serviceScope.launch {
-			combine(playbackController.playback, playbackController.speaker) { state, speaker ->
+			combine(
+				playbackController.playback,
+				playbackController.speaker,
+				playbackController.speedMultiplier,
+				playbackController.sleepUntilEpochMs,
+				playbackController.planVersion,
+			) { state, speaker, _, _, _ ->
 				state to speaker
 			}.collect { (state, speaker) ->
 				if (!shown.get()) return@collect
 				playing = state == TTSPlayback.Playing
+				refreshIdentity()
 				text = speaker?.let { getString(R.string.reader_tts_speaking, it) }
 					?: if (state == TTSPlayback.Paused) getString(R.string.reader_tts_paused) else text
 				publish()
+			}
+		}
+		serviceScope.launch(Dispatchers.IO) {
+			playbackController.queueFinished.collect {
+				if (playbackController.chapterHost != null) return@collect
+				chapterPlayer.playNextIfEnabled()
+			}
+		}
+		serviceScope.launch {
+			while (true) {
+				delay(30_000)
+				if (shown.get() && playbackController.sleepUntilEpochMs.value > System.currentTimeMillis()) {
+					publish()
+				}
 			}
 		}
 	}
@@ -213,6 +269,13 @@ class NarrationService : Service(), DIAware {
 				shutdown()
 				return START_NOT_STICKY
 			}
+
+			ACTION_SKIP_NEXT -> playbackController.skipForward()
+			ACTION_SKIP_PREVIOUS -> playbackController.skipBackward()
+			ACTION_CHAPTER_NEXT -> shiftChapter(1)
+			ACTION_CHAPTER_PREVIOUS -> shiftChapter(-1)
+			ACTION_SPEED -> playbackController.cycleSpeed()
+			ACTION_SLEEP -> playbackController.cycleSleep()
 
 			else -> {
 				playing = intent.getBooleanExtra(EXTRA_PLAYING, playbackController.playback.value == TTSPlayback.Playing)
@@ -264,17 +327,70 @@ class NarrationService : Service(), DIAware {
 			if (!pausedByFocus) abandonFocus()
 		}
 		val state = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+		val rate = if (playing) playbackController.speedMultiplier.value else 0f
+		mediaSession.setMetadata(
+			MediaMetadata.Builder()
+				.putString(MediaMetadata.METADATA_KEY_TITLE, title.ifBlank {
+					getString(R.string.notification_channel_name_narration)
+				})
+				.putString(MediaMetadata.METADATA_KEY_ARTIST, statusText())
+				.build()
+		)
 		mediaSession.setPlaybackState(
 			PlaybackState.Builder()
 				.setActions(
 					PlaybackState.ACTION_PLAY or
 						PlaybackState.ACTION_PAUSE or
-						PlaybackState.ACTION_STOP
+						PlaybackState.ACTION_PLAY_PAUSE or
+						PlaybackState.ACTION_STOP or
+						PlaybackState.ACTION_SKIP_TO_NEXT or
+						PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+						PlaybackState.ACTION_FAST_FORWARD or
+						PlaybackState.ACTION_REWIND
 				)
-				.setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, if (playing) 1f else 0f)
+				.addCustomAction(customAction(ACTION_CHAPTER_PREVIOUS, getString(R.string.reader_tts_previous_chapter), android.R.drawable.ic_media_rew))
+				.addCustomAction(customAction(ACTION_CHAPTER_NEXT, getString(R.string.reader_tts_next_chapter_action), android.R.drawable.ic_media_ff))
+				.addCustomAction(customAction(ACTION_SPEED, getString(R.string.reader_tts_speed, speedLabel()), android.R.drawable.ic_menu_sort_by_size))
+				.addCustomAction(customAction(ACTION_SLEEP, sleepActionLabel(), android.R.drawable.ic_lock_idle_alarm))
+				.setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, rate)
 				.build()
 		)
 		mediaSession.isActive = true
+	}
+
+	private fun refreshIdentity() {
+		val controllerTitle = playbackController.title
+		if (controllerTitle.isNotBlank()) title = controllerTitle
+		if (playbackController.novelId >= 0) novelId = playbackController.novelId
+		if (playbackController.chapterId >= 0) chapterId = playbackController.chapterId
+	}
+
+	private fun shiftChapter(delta: Int) {
+		serviceScope.launch(Dispatchers.IO) {
+			val host = playbackController.chapterHost
+			if (host != null) {
+				host.playRelativeChapter(delta)
+			} else {
+				chapterPlayer.playRelative(delta, announce = false)
+			}
+		}
+	}
+
+	private fun speedLabel(): String {
+		val speed = playbackController.speedMultiplier.value
+		val text = if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()
+		return "${text}×"
+	}
+
+	private fun statusText(): String {
+		val until = playbackController.sleepUntilEpochMs.value
+		val sleep = if (until > System.currentTimeMillis()) {
+			val minutes = ((until - System.currentTimeMillis() + 59_999L) / 60_000L).toInt()
+			getString(R.string.reader_tts_sleep_minutes, minutes)
+		} else {
+			null
+		}
+		return listOfNotNull(text.ifBlank { null }, speedLabel(), sleep).joinToString(" · ")
 	}
 
 	private fun notification(): Notification {
@@ -288,15 +404,28 @@ class NarrationService : Service(), DIAware {
 			},
 			pendingFlags(),
 		)
-		val toggle = if (playing) {
-			action(android.R.drawable.ic_media_pause, getString(R.string.pause), ACTION_PAUSE)
-		} else {
-			action(android.R.drawable.ic_media_play, getString(R.string.resume), ACTION_RESUME)
-		}
+		val toggleAction = if (playing) ACTION_PAUSE else ACTION_RESUME
+		val toggleIcon = if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+		val toggleLabel = if (playing) getString(R.string.pause) else getString(R.string.resume)
+		val expanded = RemoteViews(packageName, R.layout.notification_narration)
+		val shownTitle = title.ifBlank { getString(R.string.notification_channel_name_narration) }
+		expanded.setTextViewText(R.id.narration_title, shownTitle)
+		expanded.setTextViewText(R.id.narration_status, statusText())
+		expanded.setTextViewText(R.id.narration_speed, getString(R.string.reader_tts_speed, speedLabel()))
+		expanded.setTextViewText(R.id.narration_sleep, sleepActionLabel())
+		expanded.setImageViewResource(R.id.narration_toggle, toggleIcon)
+		expanded.setOnClickPendingIntent(R.id.narration_previous, servicePending(ACTION_SKIP_PREVIOUS))
+		expanded.setOnClickPendingIntent(R.id.narration_toggle, servicePending(toggleAction))
+		expanded.setOnClickPendingIntent(R.id.narration_next, servicePending(ACTION_SKIP_NEXT))
+		expanded.setOnClickPendingIntent(R.id.narration_chapter_previous, servicePending(ACTION_CHAPTER_PREVIOUS))
+		expanded.setOnClickPendingIntent(R.id.narration_chapter_next, servicePending(ACTION_CHAPTER_NEXT))
+		expanded.setOnClickPendingIntent(R.id.narration_speed, servicePending(ACTION_SPEED))
+		expanded.setOnClickPendingIntent(R.id.narration_sleep, servicePending(ACTION_SLEEP))
+		expanded.setOnClickPendingIntent(R.id.narration_stop, servicePending(ACTION_STOP))
 		return NotificationCompat.Builder(this, CHANNEL_NARRATION)
 			.setSmallIcon(R.drawable.ic_narration_notification)
-			.setContentTitle(title.ifBlank { getString(R.string.notification_channel_name_narration) })
-			.setContentText(text)
+			.setContentTitle(shownTitle)
+			.setContentText(statusText())
 			.setContentIntent(open)
 			.setOngoing(true)
 			.setOnlyAlertOnce(true)
@@ -304,20 +433,33 @@ class NarrationService : Service(), DIAware {
 			.setCategory(NotificationCompat.CATEGORY_TRANSPORT)
 			.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 			.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-			.addAction(toggle)
-			.addAction(action(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.reader_tts_stop), ACTION_STOP))
+			.setCustomBigContentView(expanded)
+			.addAction(action(android.R.drawable.ic_media_previous, getString(R.string.reader_tts_previous), ACTION_SKIP_PREVIOUS))
+			.addAction(action(toggleIcon, toggleLabel, toggleAction))
+			.addAction(action(android.R.drawable.ic_media_next, getString(R.string.reader_tts_next), ACTION_SKIP_NEXT))
 			.build()
 	}
 
-	private fun action(icon: Int, label: String, action: String): NotificationCompat.Action {
-		val intent = PendingIntent.getService(
+	private fun sleepActionLabel(): String {
+		val until = playbackController.sleepUntilEpochMs.value
+		if (until <= System.currentTimeMillis()) return getString(R.string.reader_tts_sleep)
+		val minutes = ((until - System.currentTimeMillis() + 59_999L) / 60_000L).toInt()
+		return getString(R.string.reader_tts_sleep_minutes, minutes)
+	}
+
+	private fun action(icon: Int, label: String, action: String): NotificationCompat.Action =
+		NotificationCompat.Action(icon, label, servicePending(action))
+
+	private fun servicePending(action: String): PendingIntent =
+		PendingIntent.getService(
 			this,
 			action.hashCode(),
 			Intent(this, NarrationService::class.java).setAction(action),
 			pendingFlags(),
 		)
-		return NotificationCompat.Action(icon, label, intent)
-	}
+
+	private fun customAction(action: String, label: String, icon: Int): PlaybackState.CustomAction =
+		PlaybackState.CustomAction.Builder(action, label, icon).build()
 
 	private fun pendingFlags(): Int {
 		val immutable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
@@ -405,6 +547,12 @@ class NarrationService : Service(), DIAware {
 		private const val ACTION_RESUME = "app.shosetsu.android.tts.RESUME"
 		private const val ACTION_STOP = "app.shosetsu.android.tts.STOP"
 		private const val ACTION_DISMISS = "app.shosetsu.android.tts.DISMISS"
+		private const val ACTION_SKIP_NEXT = "app.shosetsu.android.tts.SKIP_NEXT"
+		private const val ACTION_SKIP_PREVIOUS = "app.shosetsu.android.tts.SKIP_PREVIOUS"
+		private const val ACTION_CHAPTER_NEXT = "app.shosetsu.android.tts.CHAPTER_NEXT"
+		private const val ACTION_CHAPTER_PREVIOUS = "app.shosetsu.android.tts.CHAPTER_PREVIOUS"
+		private const val ACTION_SPEED = "app.shosetsu.android.tts.SPEED"
+		private const val ACTION_SLEEP = "app.shosetsu.android.tts.SLEEP"
 		private const val EXTRA_PLAYING = "playing"
 		private const val EXTRA_TITLE = "title"
 		private const val EXTRA_TEXT = "text"
