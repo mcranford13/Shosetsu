@@ -40,9 +40,15 @@ interface IFileCachedAppUpdateDataSource {
 	suspend fun save(appUpdate: AppUpdateEntity)
 
 	/**
-	 * Deletes the file
+	 * Deletes the cached update metadata and any downloaded APK
 	 */
 	suspend fun delete()
+
+	/**
+	 * Absolute path of a fully written update APK, if one is still on disk.
+	 * A new [save] for a different version removes it.
+	 */
+	fun existingApkPath(): String?
 
 	/**
 	 * Saves the APK bytes to the filesystem

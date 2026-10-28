@@ -37,6 +37,7 @@ import app.shosetsu.android.common.ext.logE
 import app.shosetsu.android.common.ext.logI
 import app.shosetsu.android.common.ext.notificationBuilder
 import app.shosetsu.android.common.ext.notificationManager
+import app.shosetsu.android.common.ext.pendingActivityFlags
 import app.shosetsu.android.common.ext.setSmallIcon
 import app.shosetsu.android.domain.repository.base.IAppUpdatesRepository
 import app.shosetsu.android.domain.repository.base.ISettingsRepository
@@ -81,10 +82,12 @@ class AppUpdateCheckWorker(
 	private val openAppForUpdateIntent: Intent
 		get() = Intent(applicationContext, MainActivity::class.java).apply {
 			action = ACTION_OPEN_APP_UPDATE
+			flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
 		}
 	override val defaultNotificationID: Int = ID_APP_UPDATE
 
 	private val updateRepo by instance<IAppUpdatesRepository>()
+	private val settingsRepository by instance<ISettingsRepository>()
 	override val notificationManager: NotificationManagerCompat by notificationManager()
 
 	override val baseNotificationBuilder: NotificationCompat.Builder
@@ -104,36 +107,19 @@ class AppUpdateCheckWorker(
 			updateRepo.fetch()
 		} catch (e: HTTPException) {
 			logE("Error!", e)
-			notify("${e.code}") {
-				setOngoing(false)
-			}
-			return Result.failure()
+			return failCheck("${e.code}")
 		} catch (e: UnknownHostException) {
 			logE("Error!", e)
-			notify("Error! ${e.message}") {
-				setOngoing(false)
-			}
-			return Result.failure()
+			return failCheck("Error! ${e.message}")
 		} catch (e: IOException) {
 			logE("Error!", e)
-			notify("Error! ${e.message}") {
-				setOngoing(false)
-			}
-			return Result.failure()
+			return failCheck("Error! ${e.message}")
 		} catch (e: FilePermissionException) {
 			logE("Error!", e)
-			notify("Error! ${e.message}") {
-				setOngoing(false)
-				addReportErrorAction(applicationContext, defaultNotificationID, e)
-			}
-			return Result.failure()
+			return failCheck("Error! ${e.message}", e)
 		} catch (e: Exception) {
 			logE("Error!", e)
-			notify("Error! ${e.message}") {
-				setOngoing(false)
-				addReportErrorAction(applicationContext, defaultNotificationID, e)
-			}
-			return Result.failure()
+			return failCheck("Error! ${e.message}", e)
 		}
 
 		if (entity == null) {
@@ -148,6 +134,12 @@ class AppUpdateCheckWorker(
 				setTimeoutAfter(10_000)
 			}
 		} else {
+			val openUpdate = PendingIntent.getActivity(
+				applicationContext,
+				0,
+				openAppForUpdateIntent,
+				pendingActivityFlags()
+			)
 			notify(
 				applicationContext.getString(
 					R.string.notification_app_update_available_version,
@@ -155,21 +147,53 @@ class AppUpdateCheckWorker(
 				)
 			) {
 				setOngoing(false)
+				setAutoCancel(true)
+				setContentIntent(openUpdate)
 				addAction(
 					actionBuilder(
 						Icons.Default.SystemUpdateAlt,
-						"",
-						PendingIntent.getActivity(
-							applicationContext,
-							0,
-							openAppForUpdateIntent,
-							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-						)
+						applicationContext.getString(R.string.update),
+						openUpdate
 					).build()
 				)
 			}
+			showCachedInstallPrompt()
 		}
 		return Result.success()
+	}
+
+	/**
+	 * @param report included when the failure is unexpected and there is no downloaded
+	 * APK to fall back on
+	 */
+	private suspend fun failCheck(message: CharSequence, report: Throwable? = null): Result {
+		if (showCachedInstallPrompt()) {
+			// Drop the ongoing "Starting" notification; the install prompt replaces it.
+			notificationManager.cancel(defaultNotificationID)
+			return Result.failure()
+		}
+		notify(message) {
+			setOngoing(false)
+			if (report != null) addReportErrorAction(applicationContext, defaultNotificationID, report)
+		}
+		return Result.failure()
+	}
+
+	/**
+	 * Offer a downloaded APK again.
+	 * "Not interested" still suppresses this until the user explicitly checks.
+	 *
+	 * @return true when an install notification was requested
+	 */
+	private suspend fun showCachedInstallPrompt(): Boolean {
+		if (updateRepo.cachedUpdateApk() == null) return false
+		val dismissed = settingsRepository.getString(SettingKey.DismissedUpdateVersion)
+		val pending = updateRepo.latestUpdate()
+		if (dismissed.isNotEmpty() && (pending == null || pending.version == dismissed)) {
+			return false
+		}
+		AppUpdateInstallWorker.Manager(applicationContext).start()
+		return true
 	}
 
 	/**

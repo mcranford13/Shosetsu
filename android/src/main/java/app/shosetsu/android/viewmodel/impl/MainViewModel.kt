@@ -54,6 +54,10 @@ class MainViewModel(
 	override fun isOnline(): Boolean = isOnlineUseCase()
 
 	override fun update() {
+		// Close the prompt without recording a dismissal. "Not interested" is the
+		// only path that should suppress this version; accepting still needs to be
+		// able to bring the install notification back if it was missed.
+		appUpdate.value = null
 		launchIO {
 			if (appUpdateRepo.canSelfUpdate) {
 				startInstallWorker()

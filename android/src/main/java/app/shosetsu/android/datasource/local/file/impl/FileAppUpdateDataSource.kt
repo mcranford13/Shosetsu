@@ -12,6 +12,7 @@ import app.shosetsu.android.domain.model.remote.AppUpdateDTO
 import app.shosetsu.android.providers.file.base.IFileSystemProvider
 import kotlinx.serialization.json.Json
 import org.acra.ACRA
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 
@@ -68,6 +69,15 @@ class FileAppUpdateDataSource(
 	override suspend fun save(
 		appUpdate: AppUpdateEntity
 	) {
+		val previous = try {
+			load()
+		} catch (e: Exception) {
+			null
+		}
+		val sameUpdate = previous != null &&
+			previous.version == appUpdate.version &&
+			previous.versionCode == appUpdate.versionCode
+		if (!sameUpdate) deleteApk()
 		write(AppUpdateDTO.fromEntity(appUpdate))
 	}
 
@@ -78,6 +88,17 @@ class FileAppUpdateDataSource(
 			logE("Failed to delete update file", exception)
 			ACRA.errorReporter.handleSilentException(exception)
 		}
+		deleteApk()
+	}
+
+	override fun existingApkPath(): String? {
+		if (!iFileSystemProvider.doesFileExist(CACHE, updatesCPath)) return null
+		return try {
+			val path = iFileSystemProvider.retrievePath(CACHE, updatesCPath)
+			path.takeIf { File(it).length() > 0L }
+		} catch (e: Exception) {
+			null
+		}
 	}
 
 	@Throws(IOException::class, FilePermissionException::class, FileNotFoundException::class)
@@ -85,18 +106,26 @@ class FileAppUpdateDataSource(
 		appUpdate: AppUpdateEntity,
 		bytes: InputStream
 	): String {
-		// Ensure no previous file exists
-		if (iFileSystemProvider.doesFileExist(CACHE, updatesCPath))
-			iFileSystemProvider.deleteFile(CACHE, updatesCPath)
+		deleteApk()
+		try {
+			iFileSystemProvider.createFile(CACHE, updatesCPath)
+			iFileSystemProvider.writeFile(CACHE, updatesCPath, bytes)
+		} catch (e: Exception) {
+			deleteApk()
+			throw e
+		}
 
-		// Create the new file
-		iFileSystemProvider.createFile(CACHE, updatesCPath)
-
-		// Write to the new file
-		iFileSystemProvider.writeFile(CACHE, updatesCPath, bytes)
-
-		// Return the file path
 		return iFileSystemProvider.retrievePath(CACHE, updatesCPath)
+	}
+
+	private fun deleteApk() {
+		if (!iFileSystemProvider.doesFileExist(CACHE, updatesCPath)) return
+		try {
+			iFileSystemProvider.deleteFile(CACHE, updatesCPath)
+		} catch (exception: FilePermissionException) {
+			logE("Failed to delete update apk", exception)
+			ACRA.errorReporter.handleSilentException(exception)
+		}
 	}
 
 	companion object {

@@ -76,12 +76,7 @@ fun AppUpdateDialog(
 			Text(stringResource(R.string.update_app_now_question))
 		},
 		confirmButton = {
-			TextButton(
-				onClick = {
-					onUpdate()
-					onDismissRequest()
-				}
-			) {
+			TextButton(onClick = onUpdate) {
 				Text(stringResource(R.string.update))
 			}
 		},

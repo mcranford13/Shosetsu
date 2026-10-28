@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.core.app.NotificationCompat
@@ -36,6 +35,7 @@ import app.shosetsu.android.common.ext.launchIO
 import app.shosetsu.android.common.ext.logI
 import app.shosetsu.android.common.ext.notificationBuilder
 import app.shosetsu.android.common.ext.notificationManager
+import app.shosetsu.android.common.ext.pendingActivityFlags
 import app.shosetsu.android.common.ext.removeProgress
 import app.shosetsu.android.common.ext.setNotOngoing
 import app.shosetsu.android.common.ext.setOngoing
@@ -93,6 +93,11 @@ class AppUpdateInstallWorker(appContext: Context, params: WorkerParameters) : Co
 
 
 	override suspend fun doWork(): Result {
+		updateRepo.cachedUpdateApk()?.let { cached ->
+			showInstallNotification(File(cached).getUriCompat(applicationContext))
+			return Result.success()
+		}
+
 		notify(R.string.notification_app_update_loading) {
 			setOngoing()
 		}
@@ -160,21 +165,33 @@ class AppUpdateInstallWorker(appContext: Context, params: WorkerParameters) : Co
 			return Result.failure()
 		}
 
-		val uri = File(path).getUriCompat(applicationContext)
+		showInstallNotification(File(path).getUriCompat(applicationContext))
 
+		return Result.success()
+	}
+
+	/**
+	 * Post a fresh install notification. Cancelling first makes Android alert again
+	 * when a previous install notification was still posted or had been dismissed.
+	 */
+	private fun showInstallNotification(uri: Uri) {
+		val install = installApkPendingActivity(applicationContext, uri)
+		notificationManager.cancel(defaultNotificationID)
 		notify(R.string.notification_app_update_install) {
 			setNotOngoing()
 			removeProgress()
+			setAutoCancel(true)
+			setOnlyAlertOnce(false)
+			setContentIntent(install)
+			setPriority(NotificationCompat.PRIORITY_HIGH)
 			addAction(
 				actionBuilder(
 					Icons.Default.SystemUpdateAlt,
 					applicationContext.getString(R.string.install),
-					installApkPendingActivity(applicationContext, uri)
+					install
 				).build()
 			)
 		}
-
-		return Result.success()
 	}
 
 	/**
@@ -192,7 +209,7 @@ class AppUpdateInstallWorker(appContext: Context, params: WorkerParameters) : Co
 			context,
 			0,
 			intent,
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+			pendingActivityFlags()
 		)
 	}
 
@@ -217,7 +234,7 @@ class AppUpdateInstallWorker(appContext: Context, params: WorkerParameters) : Co
 				logI(LogConstants.SERVICE_NEW)
 				workerManager.enqueueUniqueWork(
 					APP_UPDATE_INSTALL_WORK_ID,
-					ExistingWorkPolicy.KEEP,
+					ExistingWorkPolicy.REPLACE,
 					OneTimeWorkRequestBuilder<AppUpdateInstallWorker>().build()
 				)
 				logI(
