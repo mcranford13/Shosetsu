@@ -1,9 +1,11 @@
 package app.shosetsu.android.viewmodel.impl
 
 import app.shosetsu.android.backend.workers.onetime.AppUpdateCheckWorker
+import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.ext.launchIO
 import app.shosetsu.android.domain.model.local.Contributor
 import app.shosetsu.android.domain.repository.base.ContributorsRepository
+import app.shosetsu.android.domain.repository.base.ISettingsRepository
 import app.shosetsu.android.viewmodel.abstracted.AAboutViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -31,13 +33,16 @@ import kotlinx.collections.immutable.toImmutableList
  */
 class AboutViewModel(
 	private val manager: AppUpdateCheckWorker.Manager,
-	private val contributorRepo: ContributorsRepository
+	private val contributorRepo: ContributorsRepository,
+	private val settingsRepository: ISettingsRepository,
 ) : AAboutViewModel() {
 
 	override fun appUpdateCheck() {
 		launchIO {
-			if (!manager.isRunning())
-				manager.start()
+			// An explicit check must be able to offer the update again, including
+			// when this version was dismissed or the install notification was missed.
+			settingsRepository.setString(SettingKey.DismissedUpdateVersion, "")
+			manager.start()
 		}
 	}
 

@@ -162,7 +162,8 @@ val viewModelsModule: DI.Module = DI.Module("view_models_module") {
 	bind<AAboutViewModel>() with provider {
 		AboutViewModel(
 			manager = instance(),
-			contributorRepo = instance()
+			contributorRepo = instance(),
+			settingsRepository = instance(),
 		)
 	}
 

@@ -72,6 +72,10 @@ fun Builder.addReportErrorAction(context: Context, notificationId: Int, throwabl
 
 fun notificationBuilder(context: Context, channel: String): Builder = Builder(context, channel)
 
+fun pendingActivityFlags(): Int =
+	PendingIntent.FLAG_UPDATE_CURRENT or
+		if (SDK_INT >= VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+
 fun actionBuilder(icon: ImageVector, title: CharSequence?, intent: PendingIntent?): Action.Builder =
 	Action.Builder(if (SDK_INT >= VERSION_CODES.M) icon.toIcon() else null, title, intent)
 

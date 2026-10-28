@@ -39,6 +39,9 @@ interface IAppUpdatesRepository {
 	 */
 	val appUpdate: Flow<AppUpdateEntity?>
 
+	/** Last update emitted by [appUpdate], if one has been loaded or fetched. */
+	fun latestUpdate(): AppUpdateEntity?
+
 	/**
 	 * Checks for a new update
 	 */
@@ -70,4 +73,10 @@ interface IAppUpdatesRepository {
 		NoSuchElementException::class
 	)
 	suspend fun downloadAppUpdate(): String
+
+	/**
+	 * Path to an update APK already downloaded for the cached update, if it is
+	 * still the update [fetch] last saved.
+	 */
+	fun cachedUpdateApk(): String?
 }

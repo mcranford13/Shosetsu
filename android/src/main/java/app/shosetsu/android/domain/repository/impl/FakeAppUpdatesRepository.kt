@@ -30,6 +30,8 @@ class FakeAppUpdatesRepository : IAppUpdatesRepository {
 
 	override val appUpdate = MutableSharedFlow<AppUpdateEntity>(1)
 
+	override fun latestUpdate(): AppUpdateEntity? = appUpdate.replayCache.firstOrNull()
+
 	override suspend fun fetch(): AppUpdateEntity = onIO {
 		val entity = AppUpdateEntity(
 			"v9.9.9",
@@ -47,4 +49,6 @@ class FakeAppUpdatesRepository : IAppUpdatesRepository {
 	override val canSelfUpdate: Boolean = true
 
 	override suspend fun downloadAppUpdate(): String = throw Exception("Stub")
+
+	override fun cachedUpdateApk(): String? = null
 }
