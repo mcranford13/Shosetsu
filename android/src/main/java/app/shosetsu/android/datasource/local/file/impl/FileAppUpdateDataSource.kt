@@ -107,15 +107,39 @@ class FileAppUpdateDataSource(
 		bytes: InputStream
 	): String {
 		deleteApk()
+		deletePartialApks()
+		// existingApkPath() treats updatesCPath as complete, so it must only appear
+		// once fully written; an interrupted download must never land there.
+		val partPath = "$updatesPath/update-${System.nanoTime()}$PARTIAL_SUFFIX"
 		try {
-			iFileSystemProvider.createFile(CACHE, updatesCPath)
-			iFileSystemProvider.writeFile(CACHE, updatesCPath, bytes)
+			iFileSystemProvider.createFile(CACHE, partPath)
+			iFileSystemProvider.writeFile(CACHE, partPath, bytes)
+			iFileSystemProvider.moveFile(CACHE, partPath, updatesCPath)
 		} catch (e: Exception) {
-			deleteApk()
+			deleteQuietly(partPath)
 			throw e
+		}
+		if (!iFileSystemProvider.doesFileExist(CACHE, updatesCPath)) {
+			deleteQuietly(partPath)
+			throw IOException("Failed to move downloaded update into place")
 		}
 
 		return iFileSystemProvider.retrievePath(CACHE, updatesCPath)
+	}
+
+	private fun deletePartialApks() {
+		iFileSystemProvider.listFiles(CACHE, updatesPath)
+			.filter { it.endsWith(PARTIAL_SUFFIX) }
+			.forEach { deleteQuietly("$updatesPath/$it") }
+	}
+
+	private fun deleteQuietly(path: String) {
+		try {
+			if (iFileSystemProvider.doesFileExist(CACHE, path))
+				iFileSystemProvider.deleteFile(CACHE, path)
+		} catch (e: Exception) {
+			logE("Failed to delete $path", e)
+		}
 	}
 
 	private fun deleteApk() {
@@ -132,6 +156,7 @@ class FileAppUpdateDataSource(
 		const val updatesPath = "/updates/"
 		const val updatesFile = "/update.apk"
 		const val updatesCPath = "$updatesPath$updatesFile"
+		private const val PARTIAL_SUFFIX = ".apk.part"
 	}
 
 
