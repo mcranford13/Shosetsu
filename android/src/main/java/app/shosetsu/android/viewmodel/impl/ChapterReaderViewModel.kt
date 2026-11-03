@@ -1184,12 +1184,16 @@ class ChapterReaderViewModel(
 
 		val page = readerUIItems.indexOf(target)
 		if (page >= 0) pageJumper.emit(page)
-		onViewed(target)
-		setCurrentChapterID(target.id)
-		if (wasPlaying) {
-			withTimeoutOrNull(5.seconds) {
-				if (ttsPlayback.firstOrNull { it == TTSPlayback.Stopped } != null) {
-					onPlayTts()
+		// Changing the chapter cancels the per-chapter collector this may be running in,
+		// so the restart must not be a child of it.
+		viewModelScopeIO.launch {
+			onViewed(target)
+			setCurrentChapterID(target.id)
+			if (wasPlaying) {
+				withTimeoutOrNull(5.seconds) {
+					if (ttsPlayback.firstOrNull { it == TTSPlayback.Stopped } != null) {
+						onPlayTts()
+					}
 				}
 			}
 		}
