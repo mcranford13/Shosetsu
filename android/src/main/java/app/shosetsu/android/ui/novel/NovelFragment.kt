@@ -196,6 +196,7 @@ fun NovelInfoView(
 	val isDownloadDialogVisible by viewModel.isDownloadDialogVisible.collectAsState()
 	val showTrueDelete by viewModel.showTrueDelete.collectAsState()
 	val openLastReadResult by viewModel.openLastReadResult.collectAsState(null)
+	val canUndoMigration by viewModel.canUndoMigration.collectAsState()
 
 	val scope = rememberCoroutineScope()
 	val hostState = remember { SnackbarHostState() }
@@ -275,6 +276,8 @@ fun NovelInfoView(
 		onMigrate = {
 			onMigrate(novelId)
 		},
+		canUndoMigration = canUndoMigration,
+		onUndoMigration = viewModel::undoMigration,
 		onMarkRange = { showChapterRangeDialog = true },
 		hasCategories = categories.isNotEmpty(),
 		onSetCategories = viewModel::showCategoriesDialog,
@@ -704,6 +707,8 @@ fun NovelInfoContent(
 	onTrueDelete: () -> Unit,
 	canMigrate: Boolean,
 	onMigrate: () -> Unit,
+	canUndoMigration: Boolean = false,
+	onUndoMigration: () -> Unit = {},
 	onMarkRange: () -> Unit,
 	hasCategories: Boolean,
 	onSetCategories: () -> Unit,
@@ -746,6 +751,8 @@ fun NovelInfoContent(
 				onInverseSelection = onInverseSelection,
 				canMigrate = canMigrate,
 				onMigrate = onMigrate,
+				canUndoMigration = canUndoMigration,
+				onUndoMigration = onUndoMigration,
 				onJump = openChapterJump,
 				onMarkRange = onMarkRange,
 				hasCategories = hasCategories,

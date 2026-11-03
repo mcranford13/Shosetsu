@@ -4,26 +4,33 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,12 +52,17 @@ import androidx.compose.ui.unit.dp
 import app.shosetsu.android.R
 import app.shosetsu.android.common.enums.AppThemes
 import app.shosetsu.android.common.ext.viewModelDi
+import app.shosetsu.android.domain.model.local.MigrationCandidate
+import app.shosetsu.android.domain.model.local.MigrationComparison
+import app.shosetsu.android.domain.model.local.MigrationNovelSummary
 import app.shosetsu.android.ui.theme.ShosetsuTheme
 import app.shosetsu.android.view.compose.ImageLoadingError
+import app.shosetsu.android.view.compose.NavigateBackButton
 import app.shosetsu.android.view.compose.placeholder
 import app.shosetsu.android.view.uimodels.model.MigrationExtensionUI
 import app.shosetsu.android.view.uimodels.model.MigrationNovelUI
 import app.shosetsu.android.viewmodel.abstracted.AMigrationViewModel
+import app.shosetsu.lib.Novel
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import kotlinx.collections.immutable.ImmutableList
@@ -79,78 +91,313 @@ import kotlinx.collections.immutable.ImmutableList
  * 9 / June / 2019
  *
  * @author github.com/doomsdayrs
- * yes, a THIRD ONE
  */
 
 @Composable
 fun MigrationView(
 	novelIds: List<Int>,
+	onBack: () -> Unit,
 ) {
 	val viewModel: AMigrationViewModel = viewModelDi()
+	val hostState = remember { SnackbarHostState() }
+	val context = LocalContext.current
 	LaunchedEffect(novelIds) {
 		viewModel.setNovels(novelIds)
 	}
+	LaunchedEffect(viewModel) {
+		viewModel.migrated.collect { id ->
+			val result = hostState.showSnackbar(
+				message = context.getString(R.string.migration_done),
+				actionLabel = context.getString(R.string.migration_undo)
+			)
+			if (result == SnackbarResult.ActionPerformed) viewModel.undo(id)
+			if (!viewModel.hasRemainingNovels()) onBack()
+		}
+	}
 
-	MigrationContent(viewModel)
+	val comparison by viewModel.comparison.collectAsState()
+	MigrationContent(
+		viewModel = viewModel,
+		hostState = hostState,
+		onBack = {
+			if (comparison != null) viewModel.dismissComparison() else onBack()
+		}
+	)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MigrationContent(viewModel: AMigrationViewModel) {
+fun MigrationContent(
+	viewModel: AMigrationViewModel,
+	hostState: SnackbarHostState,
+	onBack: () -> Unit,
+) {
 	val novelList by viewModel.novels.collectAsState()
 	val extensionsToSelect by viewModel.extensions.collectAsState()
 	val currentQuery by viewModel.currentQuery.collectAsState()
+	val results by viewModel.results.collectAsState()
+	val hasSearched by viewModel.hasSearched.collectAsState()
+	val isWorking by viewModel.isWorking.collectAsState()
+	val error by viewModel.error.collectAsState()
+	val comparison by viewModel.comparison.collectAsState()
+	val selectedIndex = novelList.indexOfFirst { it.isSelected }
 
-	Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-		// Novels that the user selected to transfer
-		Box(
-			modifier = Modifier
-				.fillMaxWidth()
-				.fillMaxHeight(.25f)
-		) {
-			// TODO Loading via loading flow
-			// MigrationNovelsLoadingContent()
-			MigrationNovelsContent(list = novelList) {
-				viewModel.setWorkingOn(it.id)
+	Scaffold(
+		modifier = Modifier.fillMaxSize(),
+		topBar = {
+			TopAppBar(
+				title = { Text(stringResource(R.string.migrate_source)) },
+				navigationIcon = { NavigateBackButton(onBack) }
+			)
+		},
+		snackbarHost = { SnackbarHost(hostState) }
+	) { padding ->
+		if (comparison != null) {
+			MigrationComparisonContent(
+				comparison = comparison!!,
+				isWorking = isWorking,
+				error = error,
+				onConfirm = viewModel::confirm,
+				modifier = Modifier.padding(padding)
+			)
+		} else {
+			Column(
+				modifier = Modifier
+					.padding(padding)
+					.fillMaxSize()
+			) {
+				if (novelList.size > 1 && selectedIndex >= 0) {
+					Text(
+						text = stringResource(
+							R.string.migration_queue,
+							selectedIndex + 1,
+							novelList.size
+						),
+						modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+						style = MaterialTheme.typography.titleMedium
+					)
+				}
+				Box(
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(180.dp)
+				) {
+					MigrationNovelsContent(list = novelList) {
+						viewModel.setWorkingOn(it.id)
+					}
+				}
+				OutlinedTextField(
+					value = currentQuery,
+					onValueChange = viewModel::setQuery,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = 16.dp),
+					label = { Text(stringResource(R.string.migration_with_name)) },
+					singleLine = true
+				)
+				Text(
+					text = stringResource(R.string.migration_in),
+					modifier = Modifier.padding(start = 16.dp, top = 12.dp)
+				)
+				Box(
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(88.dp)
+				) {
+					if (extensionsToSelect.isEmpty()) {
+						Text(
+							text = stringResource(R.string.migration_no_extensions),
+							modifier = Modifier.padding(16.dp)
+						)
+					} else {
+						MigrationExtensionsContent(
+							list = extensionsToSelect,
+							onClick = viewModel::setSelectedExtension
+						)
+					}
+				}
+				Button(
+					onClick = viewModel::search,
+					enabled = !isWorking && extensionsToSelect.isNotEmpty(),
+					modifier = Modifier
+						.padding(horizontal = 16.dp, vertical = 8.dp)
+						.align(Alignment.End)
+				) {
+					Text(stringResource(R.string.search))
+				}
+				if (isWorking) {
+					CircularProgressIndicator(
+						modifier = Modifier
+							.padding(16.dp)
+							.align(Alignment.CenterHorizontally)
+					)
+				}
+				if (!error.isNullOrBlank()) {
+					Text(
+						text = error!!,
+						color = MaterialTheme.colorScheme.error,
+						modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+					)
+				}
+				when {
+					results.isNotEmpty() -> MigrationResultsContent(
+						results = results,
+						onClick = viewModel::selectCandidate,
+						modifier = Modifier.weight(1f)
+					)
+					hasSearched && !isWorking -> Text(
+						text = stringResource(R.string.migration_no_results),
+						modifier = Modifier.padding(16.dp)
+					)
+					else -> Text(
+						text = stringResource(R.string.migration_search_hint),
+						modifier = Modifier.padding(16.dp)
+					)
+				}
 			}
 		}
+	}
+}
 
-
-		Text(text = "With name")
-
-		if (currentQuery != null) {
-			TextField(value = currentQuery!!, onValueChange = viewModel::setQuery)
+@Composable
+private fun MigrationResultsContent(
+	results: List<MigrationCandidate>,
+	onClick: (MigrationCandidate) -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	LazyColumn(
+		modifier = modifier.fillMaxWidth(),
+		contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+		verticalArrangement = Arrangement.spacedBy(8.dp)
+	) {
+		items(results) { candidate ->
+			Card(onClick = { onClick(candidate) }, modifier = Modifier.fillMaxWidth()) {
+				Row(
+					modifier = Modifier.padding(8.dp),
+					verticalAlignment = Alignment.CenterVertically
+				) {
+					MigrationCover(candidate.imageURL, candidate.title, Modifier.size(56.dp))
+					Text(
+						text = candidate.title,
+						modifier = Modifier.padding(start = 12.dp),
+						style = MaterialTheme.typography.titleMedium
+					)
+				}
+			}
 		}
+	}
+}
 
-		Text(text = "In")
-
-		// Select the extension
-		Box(
-			modifier = Modifier
-				.fillMaxWidth()
-				.fillMaxHeight(.25f)
+@Composable
+private fun MigrationComparisonContent(
+	comparison: MigrationComparison,
+	isWorking: Boolean,
+	error: String?,
+	onConfirm: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	Column(
+		modifier = modifier
+			.fillMaxSize()
+			.verticalScroll(rememberScrollState())
+			.padding(16.dp),
+		verticalArrangement = Arrangement.spacedBy(12.dp)
+	) {
+		Text(stringResource(R.string.migration_downloads_stay))
+		Text(
+			text = stringResource(
+				R.string.migration_read_match,
+				comparison.matchedReadChapters,
+				comparison.readChapters
+			),
+			style = MaterialTheme.typography.titleMedium
+		)
+		if (comparison.alreadyInLibrary) {
+			Text(stringResource(R.string.migration_already_in_library))
+		}
+		Row(
+			modifier = Modifier.fillMaxWidth(),
+			horizontalArrangement = Arrangement.spacedBy(12.dp)
 		) {
-			// TODO Loading via loading flow
-			// MigrationExtensionsLoadingContent()
-			MigrationExtensionsContent(
-				list = extensionsToSelect,
-				onClick = viewModel::setSelectedExtension
+			MigrationSummaryColumn(
+				heading = stringResource(R.string.migration_from),
+				summary = comparison.source,
+				modifier = Modifier.weight(1f)
+			)
+			MigrationSummaryColumn(
+				heading = stringResource(R.string.migration_to),
+				summary = comparison.destination,
+				modifier = Modifier.weight(1f)
 			)
 		}
-
-		// Holds an arrow indicating it will be transferred to
-		Text(text = "To")
-
-		Icon(
-			imageVector = Icons.Outlined.ExpandMore,
-			contentDescription = "The above will transfer to the below"
-		)
-
-
-		// Select novel from its results
-		Box(modifier = Modifier.fillMaxWidth()) {
-			Text(text = "This is under construction, Try again in another release :D")
+		if (!error.isNullOrBlank()) {
+			Text(text = error, color = MaterialTheme.colorScheme.error)
 		}
+		Button(
+			onClick = onConfirm,
+			enabled = !isWorking,
+			modifier = Modifier.fillMaxWidth()
+		) {
+			Text(stringResource(R.string.migration_confirm))
+		}
+		if (isWorking) {
+			CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+		}
+	}
+}
+
+@Composable
+private fun MigrationSummaryColumn(
+	heading: String,
+	summary: MigrationNovelSummary,
+	modifier: Modifier = Modifier,
+) {
+	Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+		Text(heading, fontWeight = FontWeight.Bold)
+		MigrationCover(summary.imageURL, summary.title, Modifier
+			.fillMaxWidth()
+			.height(140.dp))
+		Text(summary.title, fontWeight = FontWeight.Bold)
+		if (summary.sourceName.isNotBlank()) {
+			Text(stringResource(R.string.migration_source, summary.sourceName))
+		}
+		Text(stringResource(R.string.migration_status, novelStatusLabel(summary.status)))
+		if (summary.authors.isNotBlank()) {
+			Text(stringResource(R.string.migration_authors, summary.authors))
+		}
+		Text(stringResource(R.string.migration_chapters, summary.chapterCount))
+		if (summary.latestChapterTitle.isBlank()) {
+			Text(stringResource(R.string.migration_latest_unknown))
+		} else {
+			Text(stringResource(R.string.migration_latest, summary.latestChapterTitle))
+			if (summary.latestReleaseDate.isNotBlank()) Text(summary.latestReleaseDate)
+		}
+	}
+}
+
+@Composable
+private fun novelStatusLabel(status: Novel.Status): String = when (status) {
+	Novel.Status.PUBLISHING -> stringResource(R.string.publishing)
+	Novel.Status.COMPLETED -> stringResource(R.string.completed)
+	Novel.Status.PAUSED -> stringResource(R.string.paused)
+	Novel.Status.UNKNOWN -> stringResource(R.string.unknown)
+}
+
+@Composable
+private fun MigrationCover(imageURL: String, title: String, modifier: Modifier) {
+	if (imageURL.isNotEmpty()) {
+		SubcomposeAsyncImage(
+			ImageRequest.Builder(LocalContext.current)
+				.data(imageURL)
+				.crossfade(true)
+				.build(),
+			contentDescription = stringResource(R.string.novel_image_content_description, title),
+			modifier = modifier,
+			error = { ImageLoadingError() },
+			loading = { Box(Modifier.placeholder(true)) }
+		)
+	} else {
+		ImageLoadingError(title, modifier)
 	}
 }
 

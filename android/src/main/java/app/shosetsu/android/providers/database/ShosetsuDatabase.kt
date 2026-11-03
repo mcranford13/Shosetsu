@@ -15,6 +15,7 @@ import app.shosetsu.android.domain.model.database.DBExtLibEntity
 import app.shosetsu.android.domain.model.database.DBInstalledExtensionEntity
 import app.shosetsu.android.domain.model.database.DBNovelCategoryEntity
 import app.shosetsu.android.domain.model.database.DBNovelEntity
+import app.shosetsu.android.domain.model.database.DBNovelMigrationEntity
 import app.shosetsu.android.domain.model.database.DBNovelPinEntity
 import app.shosetsu.android.domain.model.database.DBNovelReaderSettingEntity
 import app.shosetsu.android.domain.model.database.DBNovelSettingsEntity
@@ -45,9 +46,11 @@ import app.shosetsu.android.providers.database.dao.NovelsDao
 import app.shosetsu.android.providers.database.dao.RepositoryDao
 import app.shosetsu.android.providers.database.dao.RepositoryExtensionsDao
 import app.shosetsu.android.providers.database.dao.UpdatesDao
+import app.shosetsu.android.providers.database.dao.NovelMigrationsDao
 import app.shosetsu.android.providers.database.dao.NovelVoiceCastDao
 import app.shosetsu.android.providers.database.migrations.Migration10to11
 import app.shosetsu.android.providers.database.migrations.Migration11to12
+import app.shosetsu.android.providers.database.migrations.Migration12to13
 import app.shosetsu.android.providers.database.migrations.Migration1To2
 import app.shosetsu.android.providers.database.migrations.Migration2To3
 import app.shosetsu.android.providers.database.migrations.Migration3To4
@@ -105,8 +108,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 		DBRepositoryEntity::class,
 		DBUpdate::class,
 		DBNovelVoiceCastEntity::class,
+		DBNovelMigrationEntity::class,
 	],
-	version = 12
+	version = 13
 )
 @TypeConverters(
 	ChapterSortTypeConverter::class,
@@ -136,6 +140,7 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 	abstract val repositoryDao: RepositoryDao
 	abstract val updatesDao: UpdatesDao
 	abstract val novelVoiceCastDao: NovelVoiceCastDao
+	abstract val novelMigrationsDao: NovelMigrationsDao
 
 	companion object {
 		@Volatile
@@ -162,6 +167,7 @@ abstract class ShosetsuDatabase : RoomDatabase() {
 					Migration9to10,
 					Migration10to11,
 					Migration11to12,
+					Migration12to13,
 				).build()
 
 			if (initializationStarted.compareAndSet(false, true)) initializationScope.launch {

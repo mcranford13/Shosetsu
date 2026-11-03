@@ -43,6 +43,7 @@ import app.shosetsu.android.domain.usecases.get.GetNovelUIUseCase
 import app.shosetsu.android.domain.usecases.get.GetReaderChaptersUseCase
 import app.shosetsu.android.domain.usecases.get.GetReaderSettingUseCase
 import app.shosetsu.android.domain.usecases.get.GetRemoteNovelUseCase
+import app.shosetsu.android.domain.usecases.migrate.MigrateNovelUseCase
 import app.shosetsu.android.domain.usecases.get.GetRepositoryUseCase
 import app.shosetsu.android.domain.usecases.get.GetTrueDeleteChapterUseCase
 import app.shosetsu.android.domain.usecases.NovelVoiceCastUseCase
@@ -148,6 +149,22 @@ val useCaseModule: DI.Module = DI.Module("useCase") {
 
 	bind<GetRemoteNovelUseCase>() with provider {
 		GetRemoteNovelUseCase(instance(), instance(), instance(), instance())
+	}
+	bind<MigrateNovelUseCase>() with provider {
+		MigrateNovelUseCase(
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+			instance(),
+		)
 	}
 	bind<StartDownloadWorkerAfterUpdateUseCase>() with provider {
 		StartDownloadWorkerAfterUpdateUseCase(instance(), instance(), instance(), instance())

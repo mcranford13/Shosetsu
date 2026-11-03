@@ -50,4 +50,5 @@ val databaseModule: DI.Module = DI.Module("database_module") {
 	bind<RepositoryDao>() with singleton { instance<ShosetsuDatabase>().repositoryDao }
 	bind<UpdatesDao>() with singleton { instance<ShosetsuDatabase>().updatesDao }
 	bind<NovelVoiceCastDao>() with singleton { instance<ShosetsuDatabase>().novelVoiceCastDao }
+	bind<NovelMigrationsDao>() with singleton { instance<ShosetsuDatabase>().novelMigrationsDao }
 }

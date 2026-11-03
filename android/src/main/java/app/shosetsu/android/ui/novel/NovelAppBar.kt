@@ -43,6 +43,8 @@ fun NovelAppBar(
 
 	canMigrate: Boolean,
 	onMigrate: () -> Unit,
+	canUndoMigration: Boolean = false,
+	onUndoMigration: () -> Unit = {},
 	onJump: () -> Unit,
 	onMarkRange: () -> Unit,
 
@@ -90,6 +92,8 @@ fun NovelAppBar(
 				NovelMoreButton(
 					canMigrate = canMigrate,
 					onMigrate = onMigrate,
+					canUndoMigration = canUndoMigration,
+					onUndoMigration = onUndoMigration,
 					onJump = onJump,
 					onMarkRange = onMarkRange,
 					hasCategories = hasCategories,

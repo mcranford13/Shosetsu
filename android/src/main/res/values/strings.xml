@@ -849,4 +849,28 @@
 	<string name="view_browse_label_install_extension">Install extension "%s"</string>
 	<string name="view_browse_label_open_settings">Open %s settings</string>
 
+	<string name="migration_with_name">With name</string>
+	<string name="migration_in">In</string>
+	<string name="migration_queue">%1$d of %2$d</string>
+	<string name="migration_search_hint">Search the selected source for this novel.</string>
+	<string name="migration_no_results">No results.</string>
+	<string name="migration_no_extensions">Install another source to migrate this novel.</string>
+	<string name="migration_chapters">%1$d chapters</string>
+	<string name="migration_latest">Latest: %1$s</string>
+	<string name="migration_latest_unknown">Latest chapter unknown</string>
+	<string name="migration_read_match">%1$d of %2$d read chapters match</string>
+	<string name="migration_downloads_stay">Downloaded chapters stay with the original novel.</string>
+	<string name="migration_confirm">Migrate</string>
+	<string name="migration_undo">Undo</string>
+	<string name="migration_done">Novel migrated</string>
+	<string name="migration_already_in_library">This novel is already in your library on the new source. Progress will be merged into that copy.</string>
+	<string name="migration_undo_menu">Undo migration</string>
+	<string name="migration_undo_failed">Could not undo the migration: %1$s</string>
+	<string name="migration_authors">Authors: %1$s</string>
+	<string name="migration_status">Status: %1$s</string>
+	<string name="migration_source">Source: %1$s</string>
+	<string name="migration_from">From</string>
+	<string name="migration_to">To</string>
+	<string name="migration_failed">Migration failed.</string>
+
 </resources>

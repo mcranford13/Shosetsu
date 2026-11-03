@@ -145,7 +145,9 @@ fun NovelMoreButton(
 	onMarkRange: () -> Unit,
 	onSetCategories: () -> Unit,
 	canMigrate: Boolean,
-	hasCategories: Boolean
+	hasCategories: Boolean,
+	canUndoMigration: Boolean = false,
+	onUndoMigration: () -> Unit = {},
 ) = MoreIconButton { onDismissRequest ->
 	if (canMigrate)
 		DropdownMenuItem(
@@ -155,6 +157,17 @@ fun NovelMoreButton(
 			onClick = {
 				onDismissRequest()
 				onMigrate()
+			}
+		)
+
+	if (canUndoMigration)
+		DropdownMenuItem(
+			text = {
+				Text(stringResource(R.string.migration_undo_menu))
+			},
+			onClick = {
+				onDismissRequest()
+				onUndoMigration()
 			}
 		)
 

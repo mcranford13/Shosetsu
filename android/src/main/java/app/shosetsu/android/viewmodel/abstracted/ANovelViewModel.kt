@@ -248,6 +248,11 @@ abstract class ANovelViewModel
 
 	abstract fun hideDownloadDialog()
 
+	/** True when this novel is the destination of a migration that can still be undone. */
+	abstract val canUndoMigration: StateFlow<Boolean>
+
+	abstract fun undoMigration()
+
 	/**
 	 * @param showRemoveBookmark If any chapters are bookmarked, show the remove bookmark logo
 	 * @param showBookmark If any chapters are not bookmarked, show bookmark
