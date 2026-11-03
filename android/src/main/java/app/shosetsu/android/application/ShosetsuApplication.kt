@@ -14,6 +14,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.work.Configuration
 import app.shosetsu.android.BuildConfig
 import app.shosetsu.android.R
+import app.shosetsu.android.backend.workers.perodic.AppUpdateCheckCycleWorker
 import app.shosetsu.android.common.SettingKey
 import app.shosetsu.android.common.consts.Notifications
 import app.shosetsu.android.common.consts.ShortCuts
@@ -242,6 +243,9 @@ class ShosetsuApplication : Application(), LifecycleEventObserver, DIAware,
 
 		// Begin the onCreate process of our parent class
 		super.onCreate()
+
+		// Cancel a cycle that older versions scheduled next to novel updates.
+		AppUpdateCheckCycleWorker.Manager(this).stop()
 
 		// Avoid potential crashes
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

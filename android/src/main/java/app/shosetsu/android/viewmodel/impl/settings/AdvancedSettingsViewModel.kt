@@ -64,8 +64,9 @@ class AdvancedSettingsViewModel(
 
 	override fun startCycleWorkers() {
 		backupCycleManager.start()
-		appUpdateCycleManager.start()
 		novelUpdateCycleManager.start()
+		// Restarting novel and backup cycles must not schedule an app update check.
+		appUpdateCycleManager.stop()
 		workerState.tryEmit(RestartResult.RESTARTED)
 	}
 
