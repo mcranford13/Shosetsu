@@ -60,13 +60,12 @@ class AppUpdatesRepository(
 		launchIO {
 			try {
 				val update = iFileAppUpdateDataSource.load()
-				if (compareVersion(update) > 0) {
-					logD("Update file found, notifying user")
-					appUpdate.emit(update)
-				} else {
+				if (compareVersion(update) <= 0) {
 					logD("Deleting the old update file")
 					iFileAppUpdateDataSource.delete()
 				}
+				// A saved update is not announced on startup. The About screen's
+				// check button is what fetches and surfaces an app update.
 			} catch (ignore: Exception) {
 				// If it doesn't work, meh!
 			}

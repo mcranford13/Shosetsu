@@ -31,7 +31,7 @@ class BootReceiver : BroadcastReceiver() {
 			logE("Action did not match")
 			return
 		}
-		// Starts periodic workers
+		// Starts periodic workers. App updates are not one of them.
 		AutoStartUpdateWorker(context).invoke()
 		AutoStartAppUpdateWorker(context).invoke()
 		AutoStartBackupWorker(context).invoke()
@@ -55,14 +55,12 @@ class BootReceiver : BroadcastReceiver() {
 	internal class AutoStartAppUpdateWorker(val context: Context) : DIAware {
 		override val di: DI by closestDI(context)
 		private val manager: AppUpdateCheckCycleWorker.Manager by instance()
-		private val iSettingsRepository: ISettingsRepository by instance()
 		operator fun invoke() {
 			launchIO {
-				val b = iSettingsRepository.getBoolean(SettingKey.AppUpdateOnStartup)
-				if (b && !manager.isRunning()) {
-					Log.i(logID(), "Starting app update worker on boot")
-					manager.start()
-				}
+				// Drop any previously scheduled automatic app update check.
+				// The only remaining trigger is the About settings button.
+				Log.i(logID(), "Cancelling automatic app update checks")
+				manager.stop()
 			}
 		}
 	}

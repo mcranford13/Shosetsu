@@ -222,11 +222,12 @@ sealed class SettingKey<T : Any>(val name: String, val default: T) {
 
 
 	// App Update Options
-	object AppUpdateOnStartup : BooleanKey("appUpdateOnStartup", true)
+	// Automatic checks are off. The About screen button is the only trigger.
+	object AppUpdateOnStartup : BooleanKey("appUpdateOnStartup", false)
 	object AppUpdateOnMeteredConnection : BooleanKey("appUpdateMetered", true)
 
 	object AppUpdateOnlyWhenIdle : BooleanKey("appUpdateIdle", false)
-	object AppUpdateCycle : IntKey("appUpdateCycle", 12)
+	object AppUpdateCycle : IntKey("appUpdateCycle", 0)
 	object DismissedUpdateVersion : StringKey("dismissedUpdateVersion", "")
 
 
