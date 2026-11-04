@@ -48,7 +48,10 @@ fun NavGraphBuilder.mainGraph(
 		)
 	}
 
-	composableMain<Migration> {
-		MigrationView(emptyList())
+	composableMain<Migration> { entry ->
+		MigrationView(
+			novelIds = entry.toRoute<Migration>().novelId,
+			onBack = navController::popBackStack
+		)
 	}
 }

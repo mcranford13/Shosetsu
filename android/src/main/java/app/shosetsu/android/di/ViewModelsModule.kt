@@ -262,7 +262,8 @@ val viewModelsModule: DI.Module = DI.Module("view_models_module") {
 			getCategoriesUseCase = instance(),
 			getNovelCategoriesUseCase = instance(),
 			setNovelCategoriesUseCase = instance(),
-			application = instance()
+			application = instance(),
+			migrateNovel = instance(),
 		)
 	}
 
@@ -364,7 +365,7 @@ val viewModelsModule: DI.Module = DI.Module("view_models_module") {
 	}
 
 	bind<AMigrationViewModel>() with provider {
-		MigrationViewModel(instance(), instance())
+		MigrationViewModel(instance(), instance(), instance(), instance())
 	}
 
 	bind<ACSSEditorViewModel>() with provider {

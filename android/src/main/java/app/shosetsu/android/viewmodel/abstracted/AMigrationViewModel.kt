@@ -1,10 +1,12 @@
 package app.shosetsu.android.viewmodel.abstracted
 
-import app.shosetsu.android.domain.model.local.StrippedBookmarkedNovelEntity
+import app.shosetsu.android.domain.model.local.MigrationCandidate
+import app.shosetsu.android.domain.model.local.MigrationComparison
 import app.shosetsu.android.view.uimodels.model.MigrationExtensionUI
 import app.shosetsu.android.view.uimodels.model.MigrationNovelUI
 import app.shosetsu.android.viewmodel.base.ShosetsuViewModel
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /*
@@ -32,45 +34,44 @@ import kotlinx.coroutines.flow.StateFlow
  */
 abstract class AMigrationViewModel : ShosetsuViewModel() {
 
-	/**
-	 * The query that is being used for the current novel to be searched for
-	 */
-	abstract val currentQuery: StateFlow<String?>
+	abstract val currentQuery: StateFlow<String>
 
-	/**
-	 * The extensions to select from
-	 */
 	abstract val extensions: StateFlow<ImmutableList<MigrationExtensionUI>>
 
-	/**
-	 * Novels that will be transfered
-	 */
 	abstract val novels: StateFlow<ImmutableList<MigrationNovelUI>>
 
-	/**
-	 * Which novel is currently being worked on
-	 */
 	abstract val which: StateFlow<Int>
 
-	abstract val results: StateFlow<List<StrippedBookmarkedNovelEntity>>
+	abstract val results: StateFlow<List<MigrationCandidate>>
 
-	/**
-	 * Set which novel is being worked on
-	 */
+	abstract val hasSearched: StateFlow<Boolean>
+
+	abstract val isWorking: StateFlow<Boolean>
+
+	abstract val error: StateFlow<String?>
+
+	abstract val comparison: StateFlow<MigrationComparison?>
+
+	/** Id of a migration that just finished, so the screen can offer Undo. */
+	abstract val migrated: SharedFlow<Int>
+
 	abstract fun setWorkingOn(novelId: Int)
 
-	/**
-	 * Set the novels to work with
-	 */
 	abstract fun setNovels(array: List<Int>)
 
-	/**
-	 * Set which extension to use with the currently selected novel
-	 */
 	abstract fun setSelectedExtension(extensionUI: MigrationExtensionUI)
 
-	/**
-	 * Set query of the current novel
-	 */
 	abstract fun setQuery(newQuery: String)
+
+	abstract fun search()
+
+	abstract fun selectCandidate(candidate: MigrationCandidate)
+
+	abstract fun dismissComparison()
+
+	abstract fun confirm()
+
+	abstract fun undo(migrationId: Int)
+
+	abstract fun hasRemainingNovels(): Boolean
 }

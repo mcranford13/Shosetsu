@@ -39,6 +39,7 @@ import app.shosetsu.android.domain.usecases.get.GetRepositoryUseCase
 import app.shosetsu.android.domain.usecases.get.GetURLUseCase
 import app.shosetsu.android.domain.usecases.settings.LoadChaptersResumeFirstUnreadUseCase
 import app.shosetsu.android.domain.usecases.start.StartDownloadWorkerUseCase
+import app.shosetsu.android.domain.usecases.migrate.MigrateNovelUseCase
 import app.shosetsu.android.domain.usecases.update.UpdateNovelSettingUseCase
 import app.shosetsu.android.domain.usecases.update.UpdateNovelUseCase
 import app.shosetsu.android.view.uimodels.NovelSettingUI
@@ -66,6 +67,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -125,7 +127,8 @@ class NovelViewModel(
 	private val getRepositoryUseCase: GetRepositoryUseCase,
 	private val getCategoriesUseCase: GetCategoriesUseCase,
 	private val getNovelCategoriesUseCase: GetNovelCategoriesUseCase,
-	private val setNovelCategoriesUseCase: SetNovelCategoriesUseCase
+	private val setNovelCategoriesUseCase: SetNovelCategoriesUseCase,
+	private val migrateNovel: MigrateNovelUseCase,
 ) : ANovelViewModel() {
 
 	override val exceptions: MutableSharedFlow<ExceptionSnackbarModel> = MutableSharedFlow()
@@ -784,5 +787,29 @@ class NovelViewModel(
 
 	override fun hideDownloadDialog() {
 		isDownloadDialogVisible.value = false
+	}
+
+	override val canUndoMigration: StateFlow<Boolean> by lazy {
+		novelIDLive.flatMapLatest { id ->
+			if (id < 0) flowOf(false) else migrateNovel.observeDestination(id)
+		}.stateIn(viewModelScopeIO, SharingStarted.Lazily, false)
+	}
+
+	override fun undoMigration() {
+		launchIO {
+			try {
+				migrateNovel.undoDestination(novelIDLive.value)
+			} catch (e: Exception) {
+				exceptions.emit(
+					ExceptionSnackbarModel(
+						application.getString(
+							R.string.migration_undo_failed,
+							e.message ?: application.getString(R.string.unknown)
+						),
+						e
+					)
+				)
+			}
+		}
 	}
 }
