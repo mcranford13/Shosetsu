@@ -91,6 +91,7 @@ import app.shosetsu.android.viewmodel.impl.settings.readerReadNextChapterAlert
 import app.shosetsu.android.viewmodel.impl.settings.readerSpeedOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTableHackOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTestOption
+import app.shosetsu.android.viewmodel.impl.settings.readerDictionaryOption
 import app.shosetsu.android.viewmodel.impl.settings.readerTextSelectionToggle
 import app.shosetsu.android.viewmodel.impl.settings.readerTtsBackendOption
 import app.shosetsu.android.viewmodel.impl.settings.readerUnknownVoiceOption
@@ -369,6 +370,8 @@ fun ReaderSettingsContent(
 			item { viewModel.enableFullscreen() }
 
 			item { viewModel.readerTextSelectionToggle() }
+
+			item { viewModel.readerDictionaryOption() }
 
 			item { viewModel.matchFullscreenToFocus() }
 

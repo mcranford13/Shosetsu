@@ -21,6 +21,7 @@
 	<string name="navigation_drawer_close">Close navigation drawer</string>
 
 	<string name="search">Search</string>
+	<string name="define">Define</string>
 	<string name="filter">Filter</string>
 
 	<!-- View Titles -->
@@ -641,6 +642,20 @@
 	<string name="settings_advanced_site_protection_desc">Determines the delay between each request to a site. Helping prevent site bans.</string>
 	<string name="settings_reader_text_sel_title">Disable reader text selection</string>
 	<string name="settings_reader_text_sel_desc">If you have issues with accidentally selecting text, this can help you.</string>
+	<string name="dictionary_title">English dictionary</string>
+	<string name="dictionary_desc_missing">Download definitions for words you highlight. About 20 MB, kept on this device after that.</string>
+	<string name="dictionary_desc_ready">Installed. Tap to remove it.</string>
+	<string name="dictionary_desc_downloading">Downloading… %1$d%%</string>
+	<string name="dictionary_desc_indexing">Indexing dictionary… %1$d%%</string>
+	<string name="dictionary_download">Download dictionary</string>
+	<string name="dictionary_remove">Remove dictionary</string>
+	<string name="dictionary_remove_desc">Definitions will be unavailable until you download the dictionary again.</string>
+	<string name="dictionary_missing_bubble">No dictionary is installed yet. Download it once, then definitions work offline.</string>
+	<string name="dictionary_none">No definition found for \"%1$s\".</string>
+	<string name="dictionary_select_word">Select a single word or a short phrase.</string>
+	<string name="dictionary_working">Looking up…</string>
+	<string name="dictionary_close">Close definition</string>
+	<string name="dictionary_credit">GNU Collaborative International Dictionary of English</string>
 	<string name="editor">Editor</string>
 	<string name="preview">Preview</string>
 	<string name="fragment_library_menu_tri_by_updated">By last updated</string>
@@ -683,6 +698,7 @@
 	<string name="fragment_more_dest_analytics">Analytics</string>
 	<string name="reader_long_reading_title">Long Reading Detected</string>
 	<string name="reader_long_reading_desc">Please look at something at least 5–10 meters away for 20 seconds to avoid eye damage.</string>
+	<string name="reader_long_reading_dismiss">Dismiss</string>
 	<string name="settings_reader_track_long_reading_title">Track long reading</string>
 	<string name="settings_reader_track_long_reading_desc">Track users reading time to ensure the user maintains their eye health by requiring the user to look at something 5-10 meters away for 20 seconds every 20 minutes.</string>
 	<string name="global_search">Global Search</string>

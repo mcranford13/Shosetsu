@@ -2,6 +2,7 @@ package app.shosetsu.android.ui.reader.page
 
 import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
+import android.graphics.Rect
 import android.net.Uri
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -21,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -28,6 +30,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.shosetsu.android.BuildConfig
 import app.shosetsu.android.R
+import app.shosetsu.android.ui.reader.DefinitionAnchor
+import app.shosetsu.android.ui.reader.DictionaryBubble
 import app.shosetsu.android.common.ShosetsuAccompanistWebChromeClient
 import app.shosetsu.android.common.utils.ProgressiveDelayer
 import app.shosetsu.android.view.compose.ScrollStateBar
@@ -75,6 +79,10 @@ fun HTMLPage(
 	val scope = rememberCoroutineScope()
 	val scrollState = rememberScrollState()
 	val state = rememberWebViewStateWithHTMLData(html)
+	val lookupState = remember { mutableStateOf<DefinitionAnchor?>(null) }
+	val onDefine = rememberUpdatedState<(String, Rect) -> Unit>({ text, rect ->
+		lookupState.value = DefinitionAnchor(text, rect.left, rect.top, rect.right, rect.bottom)
+	})
 	val navigator = rememberWebViewNavigator(scope)
 	var uriToOpen: Uri? by remember { mutableStateOf(null) }
 
@@ -117,7 +125,10 @@ fun HTMLPage(
 			state = state,
 			captureBackPresses = false,
 			onCreated = { webView ->
-				(webView as? ChapterReaderWebview)?.searchInBrowser = onSearchQuery
+				(webView as? ChapterReaderWebview)?.let { reader ->
+					reader.searchInBrowser = onSearchQuery
+					reader.onDefineWord = { text, rect -> onDefine.value(text, rect) }
+				}
 
 				webView.setBackgroundColor(backgroundColor.toArgb())
 				webView.settings.apply {
@@ -164,6 +175,13 @@ fun HTMLPage(
 			factory = {
 				ChapterReaderWebview(it)
 			}
+		)
+	}
+
+	lookupState.value?.let { request ->
+		DictionaryBubble(
+			anchor = request,
+			onDismiss = { lookupState.value = null },
 		)
 	}
 

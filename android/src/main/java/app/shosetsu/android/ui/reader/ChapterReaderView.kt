@@ -51,6 +51,7 @@ import app.shosetsu.android.view.uimodels.model.reader.ReaderUIItem
 import app.shosetsu.android.viewmodel.abstracted.AChapterReaderViewModel
 import app.shosetsu.android.viewmodel.impl.settings.EditCSS
 import app.shosetsu.android.viewmodel.impl.settings.doubleTapFocus
+import app.shosetsu.android.viewmodel.impl.settings.readerDictionaryOption
 import app.shosetsu.android.viewmodel.impl.settings.doubleTapSystem
 import app.shosetsu.android.viewmodel.impl.settings.enableFullscreen
 import app.shosetsu.android.viewmodel.impl.settings.invertChapterSwipeOption
@@ -187,6 +188,7 @@ fun ChapterReaderView(
 							)
 						}
 						item { viewModel.readerTextSelectionToggle() }
+						item { viewModel.readerDictionaryOption() }
 						item { viewModel.trackLongReadingOption() }
 						item { viewModel.readerPitchOption() }
 						item { viewModel.readerSpeedOption() }
@@ -308,6 +310,11 @@ fun ChapterReaderView(
 						} else {
 							Text("$timeLeft")
 						}
+					}
+				},
+				dismissButton = {
+					TextButton(onClick = viewModel::dismissReadingTooLong) {
+						Text(stringResource(R.string.reader_long_reading_dismiss))
 					}
 				},
 				properties = DialogProperties(

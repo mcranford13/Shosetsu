@@ -35,6 +35,9 @@ class ChapterReaderWebview(
 ) : WebView(context, attrs) {
 
 	var searchInBrowser: ((String) -> Unit)? = null
+	var onDefineWord: ((String, Rect) -> Unit)? = null
+
+	private val selectionRect = Rect()
 
 	override fun startActionMode(callback: ActionMode.Callback?): ActionMode {
 		return super.startActionMode(wrapCallback(callback))
@@ -49,24 +52,29 @@ class ChapterReaderWebview(
 
 			override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
 				callback?.onCreateActionMode(mode, menu)
-
-				// Add custom "Search" item
-				menu?.add(0, 1001, 0, R.string.search)
+				ensureActions(menu)
 				return true
 			}
 
 			override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-				return callback?.onPrepareActionMode(mode, menu) ?: false
+				val handled = callback?.onPrepareActionMode(mode, menu) ?: false
+				return ensureActions(menu) || handled
 			}
 
 			override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
-				if (item?.itemId == 1001) {
+				val itemId = item?.itemId
+				if (itemId == ITEM_SEARCH || itemId == ITEM_DEFINE) {
+					val anchor = if (itemId == ITEM_DEFINE) selectionInWindow() else null
 					getSelectedText { selectedText ->
-						selectedText?.let {
-							searchInBrowser(it)
+						mode?.finish()
+						val text = selectedText?.trim().orEmpty()
+						if (text.isEmpty()) return@getSelectedText
+						if (itemId == ITEM_DEFINE) {
+							onDefineWord?.invoke(text, anchor ?: selectionInWindow())
+						} else {
+							searchInBrowser?.invoke(text)
 						}
 					}
-					mode?.finish()
 					return true
 				}
 				return callback?.onActionItemClicked(mode, item) ?: false
@@ -91,6 +99,7 @@ class ChapterReaderWebview(
 				override fun onDestroyActionMode(mode: ActionMode?): Unit = actionMode.onDestroyActionMode(mode)
 				override fun onGetContentRect(mode: ActionMode?, view: View?, outRect: Rect?) {
 					callback.onGetContentRect(mode, view, outRect)
+					if (outRect != null && !outRect.isEmpty) selectionRect.set(outRect)
 				}
 			}
 		} else {
@@ -98,15 +107,48 @@ class ChapterReaderWebview(
 		}
 	}
 
+	private fun ensureActions(menu: Menu?): Boolean {
+		if (menu == null) return false
+		var added = false
+		if (menu.findItem(ITEM_DEFINE) == null) {
+			menu.add(0, ITEM_DEFINE, 0, R.string.define)
+			added = true
+		}
+		if (menu.findItem(ITEM_SEARCH) == null) {
+			menu.add(0, ITEM_SEARCH, 1, R.string.search)
+			added = true
+		}
+		return added
+	}
+
+	private fun selectionInWindow(): Rect {
+		val rect = Rect(selectionRect)
+		if (rect.isEmpty) rect.set(0, 0, width, 0)
+		val location = IntArray(2)
+		getLocationInWindow(location)
+		rect.offset(location[0], location[1])
+		return rect
+	}
+
 	private fun getSelectedText(callback: (String?) -> Unit) {
 		evaluateJavascript(
 			"(function(){return window.getSelection().toString();})()"
 		) { value ->
-			callback(value?.removeSurrounding("\""))
+			callback(decodeJavascriptString(value))
 		}
 	}
 
-	private fun searchInBrowser(query: String) {
-		this.searchInBrowser?.invoke(query)
+	private fun decodeJavascriptString(value: String?): String? {
+		if (value.isNullOrBlank() || value == "null") return null
+		return try {
+			org.json.JSONArray("[$value]").getString(0)
+		} catch (e: Exception) {
+			value.removeSurrounding("\"")
+		}
+	}
+
+	private companion object {
+		const val ITEM_SEARCH = 1001
+		const val ITEM_DEFINE = 1002
 	}
 }
