@@ -32,6 +32,7 @@ import app.shosetsu.android.BuildConfig
 import app.shosetsu.android.R
 import app.shosetsu.android.ui.reader.DefinitionAnchor
 import app.shosetsu.android.ui.reader.DictionaryBubble
+import app.shosetsu.android.ui.reader.ImageSearchBubble
 import app.shosetsu.android.common.ShosetsuAccompanistWebChromeClient
 import app.shosetsu.android.common.utils.ProgressiveDelayer
 import app.shosetsu.android.view.compose.ScrollStateBar
@@ -80,8 +81,14 @@ fun HTMLPage(
 	val scrollState = rememberScrollState()
 	val state = rememberWebViewStateWithHTMLData(html)
 	val lookupState = remember { mutableStateOf<DefinitionAnchor?>(null) }
+	val imageState = remember { mutableStateOf<DefinitionAnchor?>(null) }
 	val onDefine = rememberUpdatedState<(String, Rect) -> Unit>({ text, rect ->
+		imageState.value = null
 		lookupState.value = DefinitionAnchor(text, rect.left, rect.top, rect.right, rect.bottom)
+	})
+	val onImages = rememberUpdatedState<(String, Rect) -> Unit>({ text, rect ->
+		lookupState.value = null
+		imageState.value = DefinitionAnchor(text, rect.left, rect.top, rect.right, rect.bottom)
 	})
 	val navigator = rememberWebViewNavigator(scope)
 	var uriToOpen: Uri? by remember { mutableStateOf(null) }
@@ -128,6 +135,7 @@ fun HTMLPage(
 				(webView as? ChapterReaderWebview)?.let { reader ->
 					reader.searchInBrowser = onSearchQuery
 					reader.onDefineWord = { text, rect -> onDefine.value(text, rect) }
+					reader.onSearchImages = { text, rect -> onImages.value(text, rect) }
 				}
 
 				webView.setBackgroundColor(backgroundColor.toArgb())
@@ -182,6 +190,12 @@ fun HTMLPage(
 		DictionaryBubble(
 			anchor = request,
 			onDismiss = { lookupState.value = null },
+		)
+	}
+	imageState.value?.let { request ->
+		ImageSearchBubble(
+			anchor = request,
+			onDismiss = { imageState.value = null },
 		)
 	}
 
