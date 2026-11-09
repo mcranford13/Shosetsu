@@ -5,9 +5,12 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +20,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.File
-import java.security.MessageDigest
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.Reader
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import java.util.zip.ZipException
 import kotlin.coroutines.coroutineContext
 
 /*
@@ -45,22 +50,22 @@ import kotlin.coroutines.coroutineContext
  * Offline English dictionary.
  *
  * Android can send a word to another app with ACTION_DEFINE, but it has no
- * API that returns the definition to the calling app. This downloads the GNU
- * Collaborative International Dictionary of English (Webster's plus later
- * additions) and indexes it locally.
+ * API that returns the definition to the calling app. This streams an English
+ * Wiktionary extract (kaikki.org / wiktextract) and keeps the word, part of
+ * speech, and glosses in a local database. The text is Wiktionary's, under
+ * CC BY-SA 4.0 and the GFDL.
  */
 class EnglishDictionary(
 	context: Context,
 	sharedClient: OkHttpClient,
 ) {
 	private val root = File(context.filesDir, "dictionary")
-	private val databaseFile = File(root, "gcide.sqlite")
-	private val buildingFile = File(root, "gcide.sqlite.building")
-	private val archiveFile = File(root, "gcide-0.54.tar.gz")
+	private val databaseFile = File(root, "wiktionary.sqlite")
+	private val buildingFile = File(root, "wiktionary.sqlite.building")
 	private val client = OkHttpClient.Builder()
 		.proxy(sharedClient.proxy)
 		.connectTimeout(30, TimeUnit.SECONDS)
-		.readTimeout(2, TimeUnit.MINUTES)
+		.readTimeout(5, TimeUnit.MINUTES)
 		.build()
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val mutex = Mutex()
@@ -74,17 +79,17 @@ class EnglishDictionary(
 	val status: StateFlow<DictionaryStatus> = _status.asStateFlow()
 
 	init {
-		if (databaseFile.isFile) {
-			scope.launch {
-				mutex.withLock {
-					if (database != null || _status.value !is DictionaryStatus.Ready) return@withLock
-					val opened = openReadOnly()
-					if (opened == null) {
-						databaseFile.delete()
-						_status.value = DictionaryStatus.Missing
-					} else {
-						synchronized(dbLock) { database = opened }
-					}
+		scope.launch {
+			deleteLegacyGcide()
+			if (!databaseFile.isFile) return@launch
+			mutex.withLock {
+				if (database != null || _status.value !is DictionaryStatus.Ready) return@withLock
+				val opened = openReadOnly()
+				if (opened == null) {
+					deleteDatabase(databaseFile)
+					_status.value = DictionaryStatus.Missing
+				} else {
+					synchronized(dbLock) { database = opened }
 				}
 			}
 		}
@@ -97,24 +102,23 @@ class EnglishDictionary(
 			mutex.withLock {
 				try {
 					root.mkdirs()
-					val freeSpace = root.usableSpace.takeIf { it > 0L } ?: root.parentFile?.usableSpace ?: 0L
-					if (freeSpace < MIN_FREE_BYTES) error("Not enough free space for the dictionary")
-					_status.value = DictionaryStatus.Downloading(0)
-					downloadArchive()
-					coroutineContext.ensureActive()
-					_status.value = DictionaryStatus.Indexing(0)
-					importArchive()
-				} catch (e: CancellationException) {
-					buildingFile.delete()
-					archiveFile.delete()
-					if (_status.value !is DictionaryStatus.Missing) {
-						_status.value = DictionaryStatus.Missing
+					deleteLegacyGcide()
+					val freeSpace = root.usableSpace.takeIf { it > 0L }
+						?: root.parentFile?.usableSpace
+						?: 0L
+					if (freeSpace < MIN_FREE_BYTES) {
+						error("Not enough free space. About 2 GB is needed while the dictionary installs.")
 					}
-					throw e
+					_status.value = DictionaryStatus.Downloading(0)
+					install()
 				} catch (e: Exception) {
+					deleteDatabase(buildingFile)
+					if (e is CancellationException || coroutineContext[Job]?.isActive == false) {
+						_status.value = DictionaryStatus.Missing
+						if (e is CancellationException) throw e
+						throw CancellationException("Dictionary install cancelled", e)
+					}
 					Log.w(TAG, "Dictionary install failed", e)
-					buildingFile.delete()
-					archiveFile.delete()
 					_status.value = DictionaryStatus.Failed(
 						e.message?.take(180) ?: "Could not install the dictionary"
 					)
@@ -131,9 +135,8 @@ class EnglishDictionary(
 					database?.close()
 					database = null
 				}
-				databaseFile.delete()
-				buildingFile.delete()
-				archiveFile.delete()
+				deleteDatabase(databaseFile)
+				deleteDatabase(buildingFile)
 				_status.value = DictionaryStatus.Missing
 			}
 		}
@@ -174,58 +177,8 @@ class EnglishDictionary(
 		}
 	}
 
-	private suspend fun downloadArchive() {
-		var lastError: Exception? = null
-		for (url in SOURCES) {
-			try {
-				downloadFrom(url)
-				val hash = archiveFile.sha256()
-				if (!hash.equals(SHA256, ignoreCase = true)) {
-					archiveFile.delete()
-					error("Dictionary download was corrupted")
-				}
-				return
-			} catch (e: CancellationException) {
-				throw e
-			} catch (e: Exception) {
-				lastError = e
-				archiveFile.delete()
-			}
-		}
-		throw lastError ?: IllegalStateException("Could not download the dictionary")
-	}
-
-	private fun downloadFrom(url: String) {
-		val request = Request.Builder().url(url).build()
-		client.newCall(request).execute().use { response ->
-			if (!response.isSuccessful) error("Download failed (${response.code})")
-			val body = response.body ?: error("Empty dictionary download")
-			val total = body.contentLength()
-			archiveFile.outputStream().use { output ->
-				body.byteStream().use { input ->
-					val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-					var readTotal = 0L
-					var lastPercent = -1
-					while (true) {
-						val count = input.read(buffer)
-						if (count < 0) break
-						output.write(buffer, 0, count)
-						readTotal += count
-						if (total > 0) {
-							val percent = ((readTotal * 100) / total).toInt().coerceIn(0, 100)
-							if (percent != lastPercent) {
-								lastPercent = percent
-								_status.value = DictionaryStatus.Downloading(percent)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	private suspend fun importArchive() {
-		buildingFile.delete()
+	private suspend fun install() {
+		deleteDatabase(buildingFile)
 		val db = SQLiteDatabase.openOrCreateDatabase(buildingFile, null)
 		try {
 			db.rawQuery("PRAGMA journal_mode=OFF", null).use { it.moveToFirst() }
@@ -234,63 +187,120 @@ class EnglishDictionary(
 				"CREATE TABLE entries (" +
 					"word_key TEXT NOT NULL, word TEXT NOT NULL, pos TEXT, definition TEXT NOT NULL)"
 			)
-			val insert = db.compileStatement(
-				"INSERT INTO entries (word_key, word, pos, definition) VALUES (?, ?, ?, ?)"
-			)
-			var files = 0
-			GzipCompressorInputStream(archiveFile.inputStream()).use { gzip ->
-				TarArchiveInputStream(gzip).use { tar ->
-					var entry = tar.nextEntry
-					while (entry != null) {
-						coroutineContext.ensureActive()
-						val name = entry.name.substringAfterLast('/')
-						if (!entry.isDirectory && name.matches(CORPUS_FILE)) {
-							val text = tar.readEntry(entry.size).toString(Charsets.ISO_8859_1)
-							db.beginTransaction()
-							try {
-								parseGcide(text).forEach { parsed ->
-									parsed.keys.forEach { key ->
-										insert.bindString(1, key)
-										insert.bindString(2, parsed.word)
-										if (parsed.pos == null) insert.bindNull(3) else insert.bindString(3, parsed.pos)
-										insert.bindString(4, parsed.definition)
-										insert.executeInsert()
-										insert.clearBindings()
-									}
-								}
-								db.setTransactionSuccessful()
-							} finally {
-								db.endTransaction()
-							}
-							files++
-							_status.value = DictionaryStatus.Indexing(((files * 100) / CORPUS_COUNT).coerceIn(0, 99))
-						} else if (!entry.isDirectory) {
-							tar.drain()
-						}
-						entry = tar.nextEntry
-					}
-				}
-			}
-			if (files == 0) error("Dictionary archive did not contain any entries")
+			val inserted = streamEntries(db)
+			if (inserted < MIN_ENTRIES) error("Dictionary download did not contain enough entries")
+			_status.value = DictionaryStatus.Indexing(99)
 			db.execSQL("CREATE INDEX idx_entries_key ON entries(word_key)")
-		} catch (e: Throwable) {
+			Log.i(TAG, "Indexed $inserted dictionary entries")
+		} catch (t: Throwable) {
 			db.close()
-			buildingFile.delete()
-			throw e
+			deleteDatabase(buildingFile)
+			if (t is ZipException && coroutineContext[Job]?.isActive != false) {
+				throw IllegalStateException("Dictionary download was incomplete", t)
+			}
+			throw t
 		}
 		db.close()
 		synchronized(dbLock) {
 			database?.close()
 			database = null
-			if (databaseFile.exists() && !databaseFile.delete()) {
-				buildingFile.delete()
-				error("Could not replace the installed dictionary")
-			}
+			deleteDatabase(databaseFile)
 			if (!buildingFile.renameTo(databaseFile)) error("Could not install the dictionary")
-			database = openReadOnly() ?: error("Could not open the dictionary")
+			database = openReadOnly() ?: run {
+				deleteDatabase(databaseFile)
+				error("Could not open the dictionary")
+			}
 		}
-		archiveFile.delete()
 		_status.value = DictionaryStatus.Ready
+	}
+
+	private suspend fun streamEntries(db: SQLiteDatabase): Int = coroutineScope {
+		val request = Request.Builder()
+			.url(SOURCE)
+			.header("Accept-Encoding", "identity")
+			.header("User-Agent", "Shosetsu")
+			.build()
+		val call = client.newCall(request)
+		val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+			try {
+				awaitCancellation()
+			} finally {
+				call.cancel()
+			}
+		}
+		try {
+			call.execute().use { response ->
+				if (!response.isSuccessful) error("Download failed (${response.code})")
+				val body = response.body ?: error("Empty dictionary download")
+				val total = body.contentLength()
+				if (total in 1 until MIN_ARCHIVE_BYTES) error("Dictionary download was incomplete")
+				val counting = CountingInputStream(body.byteStream())
+				val inserted = GZIPInputStream(counting, GZIP_BUFFER).use { gzip ->
+					InputStreamReader(gzip, Charsets.UTF_8).buffered(GZIP_BUFFER).use { text ->
+						insertEntries(db, text, counting, total)
+					}
+				}
+				if (counting.count < MIN_ARCHIVE_BYTES || (total > 0L && counting.count != total)) {
+					error("Dictionary download was incomplete")
+				}
+				inserted
+			}
+		} finally {
+			watcher.cancel()
+		}
+	}
+
+	private suspend fun insertEntries(
+		db: SQLiteDatabase,
+		text: Reader,
+		counting: CountingInputStream,
+		total: Long,
+	): Int {
+		val insert = db.compileStatement(
+			"INSERT INTO entries (word_key, word, pos, definition) VALUES (?, ?, ?, ?)"
+		)
+		val lines = CappedLineReader(text, MAX_LINE_CHARS)
+		var inserted = 0
+		var batch = 0
+		var lastPercent = -1
+		insert.use {
+			db.beginTransaction()
+			try {
+				while (true) {
+					val line = lines.readLine() ?: break
+					if (line.isEmpty()) continue
+					val record = parseWiktionaryLine(line) ?: continue
+					insert.bindString(1, record.key)
+					insert.bindString(2, record.word)
+					if (record.pos == null) insert.bindNull(3) else insert.bindString(3, record.pos)
+					insert.bindString(4, record.definition)
+					insert.executeInsert()
+					insert.clearBindings()
+					inserted++
+					batch++
+					if (batch >= BATCH) {
+						db.setTransactionSuccessful()
+						db.endTransaction()
+						db.beginTransaction()
+						batch = 0
+						val percent = if (total > 0L) {
+							((counting.count * 100) / total).toInt().coerceIn(0, 99)
+						} else {
+							0
+						}
+						if (percent != lastPercent) {
+							lastPercent = percent
+							_status.value = DictionaryStatus.Downloading(percent)
+						}
+						coroutineContext.ensureActive()
+					}
+				}
+				db.setTransactionSuccessful()
+			} finally {
+				db.endTransaction()
+			}
+		}
+		return inserted
 	}
 
 	private fun databaseOrOpen(): SQLiteDatabase? = synchronized(dbLock) {
@@ -305,50 +315,90 @@ class EnglishDictionary(
 			SQLiteDatabase.openDatabase(databaseFile.path, null, SQLiteDatabase.OPEN_READONLY)
 		}.getOrNull()
 
-	private fun File.sha256(): String {
-		val digest = MessageDigest.getInstance("SHA-256")
-		inputStream().use { input ->
-			val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+	private fun deleteLegacyGcide() {
+		listOf("gcide.sqlite", "gcide.sqlite.building", "gcide-0.54.tar.gz").forEach { name ->
+			deleteDatabase(File(root, name))
+		}
+	}
+
+	private fun deleteDatabase(file: File) {
+		file.delete()
+		File(file.path + "-journal").delete()
+		File(file.path + "-wal").delete()
+		File(file.path + "-shm").delete()
+	}
+
+	private class CountingInputStream(private val inner: InputStream) : InputStream() {
+		var count = 0L
+			private set
+
+		override fun read(): Int {
+			val value = inner.read()
+			if (value >= 0) count++
+			return value
+		}
+
+		override fun read(b: ByteArray, off: Int, len: Int): Int {
+			val n = inner.read(b, off, len)
+			if (n > 0) count += n
+			return n
+		}
+
+		override fun close() {
+			inner.close()
+		}
+	}
+
+	private class CappedLineReader(
+		private val reader: Reader,
+		private val cap: Int,
+	) {
+		private val buf = CharArray(64 * 1024)
+		private val sb = StringBuilder(1024)
+		private var pos = 0
+		private var limit = 0
+
+		fun readLine(): String? {
+			sb.setLength(0)
+			var overflow = false
+			var saw = false
 			while (true) {
-				val count = input.read(buffer)
-				if (count < 0) break
-				digest.update(buffer, 0, count)
+				if (pos >= limit) {
+					limit = reader.read(buf)
+					pos = 0
+					if (limit < 0) {
+						if (!saw) return null
+						return if (overflow) "" else sb.toString()
+					}
+				}
+				val c = buf[pos++]
+				saw = true
+				when (c) {
+					'\n' -> return if (overflow) "" else sb.toString()
+					'\r' -> Unit
+					else -> if (overflow) {
+						Unit
+					} else if (sb.length >= cap) {
+						overflow = true
+						sb.setLength(0)
+					} else {
+						sb.append(c)
+					}
+				}
 			}
 		}
-		return digest.digest().joinToString("") { "%02x".format(it) }
-	}
-
-	private fun TarArchiveInputStream.readEntry(size: Long): ByteArray {
-		if (size < 0L || size > MAX_CORPUS_BYTES) {
-			drain()
-			return ByteArray(0)
-		}
-		val out = ByteArray(size.toInt())
-		var offset = 0
-		while (offset < out.size) {
-			val count = read(out, offset, out.size - offset)
-			if (count < 0) return out.copyOf(offset)
-			offset += count
-		}
-		return out
-	}
-
-	private fun TarArchiveInputStream.drain() {
-		val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-		while (read(buffer) >= 0) Unit
 	}
 
 	private companion object {
 		const val TAG = "EnglishDictionary"
-		const val SHA256 = "ae9b0187a1d1e7ee86218c707503b5082894c0ba61eeee26d226bca169e7fbd0"
-		const val CORPUS_COUNT = 26
-		const val MAX_CORPUS_BYTES = 16L * 1024 * 1024
-		const val MIN_FREE_BYTES = 160L * 1024 * 1024
-		val CORPUS_FILE = Regex("CIDE\\.[A-Z]")
-		val SOURCES = listOf(
-			"https://ftp.gnu.org/gnu/gcide/gcide-0.54.tar.gz",
-			"https://ftpmirror.gnu.org/gcide/gcide-0.54.tar.gz",
-		)
+		const val SOURCE =
+			"https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl.gz"
+		const val MIN_FREE_BYTES = 2L * 1024 * 1024 * 1024
+		const val MIN_ARCHIVE_BYTES = 100L * 1024 * 1024
+		const val MIN_ENTRIES = 100_000
+		const val BATCH = 4_000
+		const val MAX_LINE_CHARS = 4_000_000
+		const val GZIP_BUFFER = 64 * 1024
 	}
 }
 

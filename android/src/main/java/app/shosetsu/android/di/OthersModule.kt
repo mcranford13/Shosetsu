@@ -1,6 +1,7 @@
 package app.shosetsu.android.di
 
 import app.shosetsu.android.backend.dictionary.EnglishDictionary
+import app.shosetsu.android.backend.images.CommonsImageSearch
 import app.shosetsu.android.backend.tts.AudiobookEngine
 import android.content.Context
 import app.shosetsu.android.backend.tts.NarrationChapterPlayer
@@ -74,6 +75,7 @@ internal val othersModule = DI.Module("others") {
 
 	bind<VoicePackManager>() with singleton { VoicePackManager(instance(), instance()) }
 	bind<EnglishDictionary>() with singleton { EnglishDictionary(instance(), instance()) }
+	bind<CommonsImageSearch>() with singleton { CommonsImageSearch(instance()) }
 	bind<SystemTtsSpeaker>() with singleton { SystemTtsSpeaker(instance()) }
 	bind<SherpaTtsSpeaker>() with singleton { SherpaTtsSpeaker(instance()) }
 	bind<AudiobookEngine>() with singleton { AudiobookEngine(instance(), instance(), instance()) }

@@ -10,12 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -115,20 +111,12 @@ fun DictionaryBubble(
 				.padding(8.dp)
 				.widthIn(min = 220.dp, max = 320.dp),
 		) {
-			Column(Modifier.padding(start = 16.dp, top = 4.dp, end = 4.dp, bottom = 12.dp)) {
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					Text(
-						text = entries?.firstOrNull()?.word ?: anchor.text.trim(),
-						style = MaterialTheme.typography.titleMedium,
-						modifier = Modifier
-							.weight(1f)
-							.padding(top = 8.dp),
-						maxLines = 2,
-					)
-					IconButton(onClick = onDismiss) {
-						Icon(Icons.Filled.Close, stringResource(R.string.dictionary_close))
-					}
-				}
+			Column(Modifier.padding(16.dp)) {
+				Text(
+					text = entries?.firstOrNull()?.word ?: anchor.text.trim(),
+					style = MaterialTheme.typography.titleMedium,
+					maxLines = 2,
+				)
 				DictionaryBubbleBody(
 					status = status,
 					entries = entries,
@@ -153,19 +141,16 @@ private fun DictionaryBubbleBody(
 		tooLong -> Text(
 			stringResource(R.string.dictionary_select_word),
 			style = MaterialTheme.typography.bodyMedium,
-			modifier = Modifier.padding(end = 12.dp),
+			modifier = Modifier.padding(top = 8.dp),
 		)
 		status is DictionaryStatus.Missing || status is DictionaryStatus.Failed -> {
 			Text(
 				text = if (status is DictionaryStatus.Failed) status.message
 				else stringResource(R.string.dictionary_missing_bubble),
 				style = MaterialTheme.typography.bodyMedium,
-				modifier = Modifier.padding(end = 12.dp, bottom = 8.dp),
+				modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
 			)
-			Button(
-				onClick = onDownload,
-				modifier = Modifier.padding(end = 12.dp),
-			) {
+			Button(onClick = onDownload) {
 				Text(stringResource(R.string.dictionary_download))
 			}
 		}
@@ -175,7 +160,7 @@ private fun DictionaryBubbleBody(
 			} else {
 				stringResource(R.string.dictionary_desc_indexing, (status as DictionaryStatus.Indexing).percent)
 			}
-			Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 12.dp))
+			Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
 			LinearProgressIndicator(
 				progress = {
 					val percent = when (status) {
@@ -187,11 +172,11 @@ private fun DictionaryBubbleBody(
 				},
 				modifier = Modifier
 					.fillMaxWidth()
-					.padding(top = 8.dp, end = 12.dp),
+					.padding(top = 8.dp),
 			)
 		}
 		entries == null -> Row(
-			modifier = Modifier.padding(end = 12.dp, bottom = 8.dp),
+			modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
 			horizontalArrangement = Arrangement.spacedBy(8.dp),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -201,14 +186,14 @@ private fun DictionaryBubbleBody(
 		entries.isEmpty() -> Text(
 			stringResource(R.string.dictionary_none, query),
 			style = MaterialTheme.typography.bodyMedium,
-			modifier = Modifier.padding(end = 12.dp),
+			modifier = Modifier.padding(top = 8.dp),
 		)
 		else -> {
 			Column(
 				Modifier
 					.heightIn(max = 220.dp)
 					.verticalScroll(rememberScrollState())
-					.padding(end = 12.dp),
+					.padding(top = 8.dp),
 				verticalArrangement = Arrangement.spacedBy(10.dp),
 			) {
 				entries.forEach { entry ->
@@ -229,13 +214,13 @@ private fun DictionaryBubbleBody(
 				stringResource(R.string.dictionary_credit),
 				style = MaterialTheme.typography.labelSmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
-				modifier = Modifier.padding(top = 8.dp, end = 12.dp),
+				modifier = Modifier.padding(top = 8.dp),
 			)
 		}
 	}
 }
 
-private class AnchorPopupPositionProvider(
+internal class AnchorPopupPositionProvider(
 	private val left: Int,
 	private val top: Int,
 	private val bottom: Int,

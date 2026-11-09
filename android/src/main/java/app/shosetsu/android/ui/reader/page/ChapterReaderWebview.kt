@@ -36,6 +36,7 @@ class ChapterReaderWebview(
 
 	var searchInBrowser: ((String) -> Unit)? = null
 	var onDefineWord: ((String, Rect) -> Unit)? = null
+	var onSearchImages: ((String, Rect) -> Unit)? = null
 
 	private val selectionRect = Rect()
 
@@ -63,16 +64,17 @@ class ChapterReaderWebview(
 
 			override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
 				val itemId = item?.itemId
-				if (itemId == ITEM_SEARCH || itemId == ITEM_DEFINE) {
-					val anchor = if (itemId == ITEM_DEFINE) selectionInWindow() else null
+				if (itemId == ITEM_SEARCH || itemId == ITEM_DEFINE || itemId == ITEM_IMAGES) {
+					val needsAnchor = itemId == ITEM_DEFINE || itemId == ITEM_IMAGES
+					val anchor = if (needsAnchor) selectionInWindow() else null
 					getSelectedText { selectedText ->
 						mode?.finish()
 						val text = selectedText?.trim().orEmpty()
 						if (text.isEmpty()) return@getSelectedText
-						if (itemId == ITEM_DEFINE) {
-							onDefineWord?.invoke(text, anchor ?: selectionInWindow())
-						} else {
-							searchInBrowser?.invoke(text)
+						when (itemId) {
+							ITEM_DEFINE -> onDefineWord?.invoke(text, anchor ?: selectionInWindow())
+							ITEM_IMAGES -> onSearchImages?.invoke(text, anchor ?: selectionInWindow())
+							else -> searchInBrowser?.invoke(text)
 						}
 					}
 					return true
@@ -114,8 +116,12 @@ class ChapterReaderWebview(
 			menu.add(0, ITEM_DEFINE, 0, R.string.define)
 			added = true
 		}
+		if (menu.findItem(ITEM_IMAGES) == null) {
+			menu.add(0, ITEM_IMAGES, 1, R.string.images)
+			added = true
+		}
 		if (menu.findItem(ITEM_SEARCH) == null) {
-			menu.add(0, ITEM_SEARCH, 1, R.string.search)
+			menu.add(0, ITEM_SEARCH, 2, R.string.search)
 			added = true
 		}
 		return added
@@ -150,5 +156,6 @@ class ChapterReaderWebview(
 	private companion object {
 		const val ITEM_SEARCH = 1001
 		const val ITEM_DEFINE = 1002
+		const val ITEM_IMAGES = 1003
 	}
 }

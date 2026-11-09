@@ -22,6 +22,7 @@
 
 	<string name="search">Search</string>
 	<string name="define">Define</string>
+	<string name="images">Images</string>
 	<string name="filter">Filter</string>
 
 	<!-- View Titles -->
@@ -642,20 +643,24 @@
 	<string name="settings_advanced_site_protection_desc">Determines the delay between each request to a site. Helping prevent site bans.</string>
 	<string name="settings_reader_text_sel_title">Disable reader text selection</string>
 	<string name="settings_reader_text_sel_desc">If you have issues with accidentally selecting text, this can help you.</string>
-	<string name="dictionary_title">English dictionary</string>
-	<string name="dictionary_desc_missing">Download definitions for words you highlight. About 20 MB, kept on this device after that.</string>
+	<string name="dictionary_title">English Wiktionary</string>
+	<string name="dictionary_desc_missing">Download definitions for words you highlight. About 500 MB, and about 2 GB free while it installs. Works offline after that.</string>
 	<string name="dictionary_desc_ready">Installed. Tap to remove it.</string>
-	<string name="dictionary_desc_downloading">Downloading… %1$d%%</string>
-	<string name="dictionary_desc_indexing">Indexing dictionary… %1$d%%</string>
+	<string name="dictionary_desc_downloading">Downloading dictionary… %1$d%%. This can take several minutes.</string>
+	<string name="dictionary_desc_indexing">Indexing dictionary… %1$d%%. This can take several minutes.</string>
 	<string name="dictionary_download">Download dictionary</string>
 	<string name="dictionary_remove">Remove dictionary</string>
 	<string name="dictionary_remove_desc">Definitions will be unavailable until you download the dictionary again.</string>
-	<string name="dictionary_missing_bubble">No dictionary is installed yet. Download it once, then definitions work offline.</string>
+	<string name="dictionary_missing_bubble">No dictionary is installed yet. Download English Wiktionary once (about 500 MB), then definitions work offline.</string>
 	<string name="dictionary_none">No definition found for \"%1$s\".</string>
 	<string name="dictionary_select_word">Select a single word or a short phrase.</string>
 	<string name="dictionary_working">Looking up…</string>
-	<string name="dictionary_close">Close definition</string>
-	<string name="dictionary_credit">GNU Collaborative International Dictionary of English</string>
+	<string name="dictionary_credit">English Wiktionary (CC BY-SA 4.0 / GFDL)</string>
+	<string name="image_search_working">Searching images…</string>
+	<string name="image_search_none">No images found for \"%1$s\".</string>
+	<string name="image_search_failed">Could not load images.</string>
+	<string name="image_search_credit">Wikimedia Commons</string>
+	<string name="image_search_of">Image of %1$s</string>
 	<string name="editor">Editor</string>
 	<string name="preview">Preview</string>
 	<string name="fragment_library_menu_tri_by_updated">By last updated</string>
